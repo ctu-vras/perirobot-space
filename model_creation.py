@@ -24,7 +24,7 @@ def xyz_rpy_to_matrix(xyz_rpy):
     return matrix
 
 
-def prepareRobot(joints):
+def prepareRobot(joints, robot_tf):
     d1 = 0.1273
     a2 = -0.612
     a3 = -0.5723
@@ -51,18 +51,100 @@ def prepareRobot(joints):
         T = T @ xyz_rpy_to_matrix(vals)
         mesh.transform(T)
         m += mesh
-    
-    pcd = m.sample_points_poisson_disk(50000)
-    o3d.visualization.draw_geometries([pcd])
+    m.transform(robot_tf)
+    pcd = m.sample_points_poisson_disk(30000)
     return np.asarray(pcd.points)
 
 
+def createCell():
+    x_ = np.arange(-3, 3.005, 0.005)
+    y_ = np.arange(-2, 2.005, 0.005)
+    z_ = np.array([0, 3])
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    x_ = np.array([-3, 3])
+    y_ = np.arange(-2, 2.005, 0.005)
+    z_ = np.arange(0, 3.005, 0.005)
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points1 = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    x_ = np.arange(-3, 3.005, 0.005)
+    y_ = np.array([-2, 2])
+    z_ = np.arange(0,3.005, 0.005)
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points2 = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    cell = np.concatenate((points, points1, points2))
+    return cell
+
+
+def createTable():
+    x_ = np.arange(-0.2, 1.505, 0.005)
+    y_ = np.arange(-0.5, 0.505, 0.005)
+    z_ = np.array([0.9,1.0])
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    x_ = np.array([-0.2, 1.5])
+    y_ = np.arange(-0.5, 0.505, 0.005)
+    z_ = np.arange(0.9,1.005, 0.005)
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points1 = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    x_ = np.arange(-0.2, 1.505, 0.005)
+    y_ = np.array([-0.5, 0.5])
+    z_ = np.arange(0.9,1.005, 0.005)
+    x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+    points2 = np.array((x.ravel(),y.ravel(), z.ravel())).T
+
+    
+    x1_ = np.arange(-0.05, 0.055, 0.005)
+    y1_ = np.array([-0.05, 0.05])
+    z1_ = np.arange(0, 0.905, 0.005)
+    x1, y1, z1 = np.meshgrid(x1_, y1_, z1_, indexing='ij')
+    x2_ = np.array([-0.05, 0.05])
+    y2_ = np.arange(-0.05, 0.055, 0.005)
+    z2_ = np.arange(0, 0.905, 0.005)
+    x2, y2, z2 = np.meshgrid(x2_, y2_, z2_, indexing='ij')
+    points3 = np.concatenate((np.array((x1.ravel(),y1.ravel(), z1.ravel())).T,np.array((x2.ravel(),y2.ravel(), z2.ravel())).T))
+    table = np.concatenate((points, points1, points2, points3+np.array([[-0.15, -0.45 ,0]]), points3+np.array([[1.45, -0.45 ,0]]), points3+np.array([[1.45, 0.45 ,0]]), points3+np.array([[-0.15, 0.45 ,0]])))
+    return table
+
+
+
+def addHuman(filename, T):
+
+    mesh = o3d.io.read_triangle_mesh(f"data/human/{filename}")
+    mesh.compute_vertex_normals()
+    mesh.transform(T)
+    pcd = mesh.sample_points_poisson_disk(80000)
+    #o3d.visualization.draw_geometries([pcd])
+    return np.asarray(pcd.points)
+
+
+
 if __name__ == "__main__":
-    resolution = 0.01
-    model = octomap.OcTree(resolution)
+    
     joints = [0, 0,-np.pi/2,np.pi/2,-np.pi/2,-np.pi/2,0]
     
-    points = prepareRobot(joints)
-    for p in points:
-        model.updateNode(p, True)
-    model.writeBinary(b'robot.bt')
+    T = np.eye(4) # robot TF
+    T[:3,-1] = [0,0,1]
+    robot = prepareRobot(joints, T)
+    table = createTable()
+    cell = createCell()
+    filenames = ['operator-v1.stl', '02zman22-v1.stl', 'dummy.stl', 'waiting.stl', 'what.stl', 'man.stl', 'man2.stl']
+    Ts = [[0.2,-0.8,0,0,0, np.pi/2], [0.2,-0.8,0,0,0, np.pi/2], [0.2,-0.8,0,0,0,-np.pi/2], [0.3,-0.8,0,0,0,0], [0.3,-0.8,0,0,0,np.pi/2], [0.2,-0.8,0,0,0,np.pi], [0.5,-0.8,0.3,0,0,np.pi]] # human poses
+    
+    for i in range(7):
+        resolution = 0.01
+        model = octomap.OcTree(resolution)
+        for p in robot:
+            model.updateNode(p, True, lazy_eval=True)
+        for p in cell:
+            model.updateNode(p, True, lazy_eval=True)
+        for p in table:
+            model.updateNode(p, True, lazy_eval=True)
+        points = addHuman(filenames[i], xyz_rpy_to_matrix(Ts[i]))
+        for p in points:
+            model.updateNode(p, True, lazy_eval=True)
+
+        model.updateInnerOccupancy()
+    
+
+        model.writeBinary(f'scene{i}.bt'.encode())
