@@ -300,5 +300,5 @@ if __name__ == "__main__":
 
     mergeSensorData(lidar_data, lidar_poses, depthcam_data, cam_poses, pad_data+gates_data)
 
-        #plotVisibility3D(gt_tree, poses, RNG, rays, occupied)
-    #plotPadData(pads, occupied)
+    #plotVisibility3D(gt_tree, poses, RNG, rays, occupied)
+    plotPadData(pads, occupied)
