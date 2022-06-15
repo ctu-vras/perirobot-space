@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import octomap
 
 
-RESOLUTION = 0.05
+RESOLUTION = 0.05  # m resolution of octomap
 LASER_RANGE = 10
 
 def plotVisibility3D(tree, converted_poses, rng, rays=None, occupied=None):
@@ -163,47 +163,44 @@ def createSphere(fov=180, res=2, res2=2, show_fig=False):
         ax = plt.axes(projection='3d')
         ax.scatter3D(*points.T)
         plt.show()
-    
-    
-    return points #, ceiling_rays, ground_rays, wall1_rays, wall2_rays, wall3_rays, wall4_rays
+
+    return points  #, ceiling_rays, ground_rays, wall1_rays, wall2_rays, wall3_rays, wall4_rays
 
 
 def padSensorData(poses, occupied):
     points = []
     for xlimits, ylimits in poses:
         contactPoints = np.sum(
-        (occupied[:,0] >= xlimits[0]) & (occupied[:,0] <= xlimits[1]+RESOLUTION) & 
-        (occupied[:,1] >= ylimits[0]) & (occupied[:,1] <= ylimits[1]+RESOLUTION) & 
-        (occupied[:,2] >= 0.01) & (occupied[:,2] <= 0.02)) # skip ground voxels
+        (occupied[:, 0] >= xlimits[0]) & (occupied[:, 0] <= xlimits[1]+RESOLUTION) &
+        (occupied[:, 1] >= ylimits[0]) & (occupied[:, 1] <= ylimits[1]+RESOLUTION) &
+        (occupied[:, 2] >= 0.01) & (occupied[:, 2] <= 0.02))  # skip ground voxels
         if contactPoints > 0:
             x_ = np.arange(xlimits[0], xlimits[1]+RESOLUTION/2, RESOLUTION/2)
             y_ = np.arange(ylimits[0], ylimits[1]+RESOLUTION/2, RESOLUTION/2)
             z_ = np.arange(0, 3, RESOLUTION/2)
             x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
-            points.append(np.array((x.ravel(),y.ravel(), z.ravel())).T)
+            points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
 
 
     return points 
-
 
 
 def gateSensorData(poses, occupied):
     points = []
     for xlimits, ylimits, zlimits in poses:
         contactPoints = np.sum(
-        (occupied[:,0] >= xlimits[0]) & (occupied[:,0] <= xlimits[1]+RESOLUTION) & 
-        (occupied[:,1] >= ylimits[0]) & (occupied[:,1] <= ylimits[1]+RESOLUTION) & 
-        (occupied[:,2] >= zlimits[0]) & (occupied[:,2] <= zlimits[1]+RESOLUTION))
+        (occupied[:, 0] >= xlimits[0]) & (occupied[:, 0] <= xlimits[1]+RESOLUTION) &
+        (occupied[:, 1] >= ylimits[0]) & (occupied[:, 1] <= ylimits[1]+RESOLUTION) &
+        (occupied[:, 2] >= zlimits[0]) & (occupied[:, 2] <= zlimits[1]+RESOLUTION))
         
-        if contactPoints > 0: # TODO: nafouknout kvadr - nejenom pruh ale vetsi kus odpovidajici cloveku
+        if contactPoints > 0:  # TODO: nafouknout kvadr - nejenom pruh ale vetsi kus odpovidajici cloveku
             x_ = np.arange(xlimits[0], xlimits[1]+RESOLUTION/2, RESOLUTION/2)
             y_ = np.arange(ylimits[0], ylimits[1]+RESOLUTION/2, RESOLUTION/2)
             z_ = np.arange(0, 3, RESOLUTION/2)
             x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
-            points.append(np.array((x.ravel(),y.ravel(), z.ravel())).T)
+            points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
 
     return points 
-
 
 
 def depthCameraSensorData(tree, poses, cam_matrices, occupied):
@@ -217,10 +214,10 @@ def depthCameraSensorData(tree, poses, cam_matrices, occupied):
             end = np.full((3,), np.nan)
             res = tree.castRay(pos, ray, end, True, LASER_RANGE)
             if res:  
-                  
-                proj = cam_matrix@end
+                proj = cam_matrix@(end-pos)
                 proj /= proj[-1]
-                if (0 <= proj[0] <= 2*cam_matrix[0,2] and 0 <= proj[1] <= 2*cam_matrix[1,2]):  # TODO: spravna podminka pro kamery z ruznych stran - mam svetove souradnice a nikoliv lokalni
+                if (0 <= proj[0] <= 2*cam_matrix[0, 2] and
+                    0 <= proj[1] <= 2*cam_matrix[1, 2]):
                     points.append(end)
 
         points = np.array(points)
@@ -237,7 +234,6 @@ def mergeSensorData(lidar_data, lidar_poses, depthcam_data, depthcam_poses, pad_
         tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
 
     tree.updateInnerOccupancy()
-    
 
     for points in pad_data:
         for p in points:
@@ -252,34 +248,32 @@ def mergeSensorData(lidar_data, lidar_poses, depthcam_data, depthcam_poses, pad_
     saveModel(tree, 'pokus.bt')
 
 
-
 def saveModel(tree, filename):
     # remove ceiling to see something
     x_ = np.arange(-3, 3.005, 0.005) 
     y_ = np.arange(-2, 2.005, 0.005)
     z_ = np.array([3])
     x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
-    points = np.array((x.ravel(),y.ravel(), z.ravel())).T
+    points = np.array((x.ravel(), y.ravel(), z.ravel())).T
     for p in points:
         tree.deleteNode(p, False) 
 
-    
     tree.writeBinary(f'{filename}'.encode())
 
+
 if __name__ == "__main__":
-    rays = createSphere(res=1, res2=1) # not used when "occupied" voxels are sent to createVisibility3D function
+    rays = createSphere(res=1, res2=1)  # not used when "occupied" voxels are sent to createVisibility3D function
 
     gt_tree = octomap.OcTree(RESOLUTION)
     gt_tree.readBinary(("scene5.bt").encode())
     
-
     occupied, empty = getOccupiedVoxels(gt_tree, RESOLUTION)
     
     # LIDAR POSES
-    ceiling = (0.,0.,2.99)
-    ground = (0.,0.,0.02)
+    ceiling = (0., 0., 2.99)
+    ground = (0., 0., 0.02)
     wall1 = (2.99, 0, 1.5)
-    wall2 = (-2.99,0, 1.5)
+    wall2 = (-2.99, 0, 1.5)
     wall3 = (0, -1.99, 1.5)
     wall4 = (0, 1.99, 1.5)
     lidar_poses = [ceiling] #, ground, wall1, wall2, wall3, wall4]
@@ -287,7 +281,7 @@ if __name__ == "__main__":
     lidar_data = createVisibility3D(gt_tree, LASER_RANGE, lidar_poses, rays, occupied)    
     
     cam_poses = [ground]
-    cam_matrices = [np.array([[260, 0, 320],[0, 260, 240], [0,0,1]])]
+    cam_matrices = [np.array([[260, 0, 320], [0, 260, 240], [0, 0, 1]])]
     depthcam_data = depthCameraSensorData(gt_tree, cam_poses, cam_matrices, occupied)    
     
     # PADS poses - ((x_min, x_max), (y_min, y_max)) 
@@ -295,10 +289,10 @@ if __name__ == "__main__":
     pad_data = padSensorData(pads, occupied)
 
     # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max)) 
-    gates = [((-2.8, 2.8), (-0.7, -0.7), (1,1))]
+    gates = [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
     gates_data = gateSensorData(gates, occupied)
 
     mergeSensorData(lidar_data, lidar_poses, depthcam_data, cam_poses, pad_data+gates_data)
 
     #plotVisibility3D(gt_tree, poses, RNG, rays, occupied)
-    plotPadData(pads, occupied)
+    #plotPadData(pads, occupied)
