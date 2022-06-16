@@ -47,6 +47,23 @@ def plotVisibility3D(tree, converted_poses, rng, rays=None, occupied=None):
     fig.show()
 
 
+def plotSkeleton(tree, pos, keypoints, rng):
+    skeleton_lines = [[0,1], [0,2], [1,3], [2,4], [5,6], [5,7], [6,8], [7,9], [8,10], [0, 11], [0, 12], [11,13], [12,14], [13,15], [14,16]]
+    rays = keypoints - pos
+    rays = rays[np.linalg.norm(rays, axis=1) < rng, :]
+    rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
+    points = np.array(rayCast3D(tree, rays, pos, rng))
+    print(points)
+    
+    lay = go.Layout(autosize=True, scene=dict(camera=dict(eye=dict(x=1.15, y=1.15, z=0.8)), aspectmode='data'))    
+    fig = go.Figure(layout=lay)
+    fig.add_trace(go.Scatter3d(x=points[:, 0].flatten(), y=points[:, 1].flatten(), z=points[:, 2].flatten(), mode='markers'))
+
+    for l in skeleton_lines:
+        fig.add_trace(go.Scatter3d(x=points[l, 0].flatten(), y=points[l, 1].flatten(), z=points[l, 2].flatten(), mode='lines'))
+
+    fig.show()
+
 
 def plotPadData(poses, occupied):
     colors = []
@@ -114,6 +131,16 @@ def getOccupiedVoxels(tree, res):
         empty = np.concatenate(empty, axis=0)
     
     return occupied, empty
+
+
+def proximitySensor(tree, poses, rays_for_poses, rng):
+    points = [set() for _ in range(len(poses))]
+    for pos, vis, rays in zip(poses, visib, rays_for_poses):
+        pts = np.array(rayCast3D(tree, rays, pos, rng))
+        pts = np.unique(np.array(pts),axis=0)
+        points.append(pts)
+    return points
+
 
 
 def rayCast3D(tree, rays, pos, rng):
@@ -211,16 +238,14 @@ def depthCameraSensorData(tree, poses, cam_matrices, occupied, rotations):
         rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
         points = []
         pos = np.array(pos)
-        r_mat = rotation.as_matrix()
+        proj_mat = cam_matrix@np.hstack((rotation.as_matrix().T, -rotation.as_matrix().T@pos[:,np.newaxis]))
         for ray in rays:
             end = np.full((3,), np.nan)
             res = tree.castRay(pos, ray, end, True, LASER_RANGE)
             if res:
-                end_trans = r_mat@end + pos
-                proj = cam_matrix@end_trans
+                proj = proj_mat@np.array([end[0], end[1], end[2], 1])
                 proj /= proj[-1]
-                if (0 <= proj[0] <= 2*cam_matrix[0, 2] and
-                    0 <= proj[1] <= 2*cam_matrix[1, 2]):
+                if (0 <= proj[0] <= 2*cam_matrix[0, 2] and 0 <= proj[1] <= 2*cam_matrix[1, 2]):
                     points.append(end)
 
         points = np.array(points)
@@ -230,23 +255,23 @@ def depthCameraSensorData(tree, poses, cam_matrices, occupied, rotations):
 
 def mergeSensorData(lidar_data, lidar_poses, depthcam_data, depthcam_poses, pad_data):
     tree = octomap.OcTree(RESOLUTION)
-    # for points, pose in zip(lidar_data, lidar_poses):
-    #     tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
+    for points, pose in zip(lidar_data, lidar_poses):
+        tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
 
     for points, pose in zip(depthcam_data, depthcam_poses):
         tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
 
     tree.updateInnerOccupancy()
 
-    # for points in pad_data:
-    #     for p in points:
-    #         # n = tree.search(p)
-    #         # try:
-    #         #     tree.isNodeOccupied(n)
-    #         # except:
-    #         tree.updateNode(p, True, lazy_eval=True)
+    for points in pad_data:
+        for p in points:
+            # n = tree.search(p)
+            # try:
+            #     tree.isNodeOccupied(n)
+            # except:
+            tree.updateNode(p, True, lazy_eval=True)
 
-    # tree.updateInnerOccupancy()
+    tree.updateInnerOccupancy()
     
     saveModel(tree, 'pokus.bt')
 
@@ -273,29 +298,32 @@ if __name__ == "__main__":
     occupied, empty = getOccupiedVoxels(gt_tree, RESOLUTION)
     
     # LIDAR POSES
-    ceiling = (0., 0., 2.99)
-    ground = (0., 0., 0.02)
-    wall1 = (2.99, 0, 1.5)
-    wall2 = (-2.99, 0, 1.5)
-    wall3 = (0, -1.99, 1.5)
-    wall4 = (0, 1.99, 1.5)
-    lidar_poses = [ceiling] #, ground, wall1, wall2, wall3, wall4]
+    ceiling = (0.5, 0., 2.99)#, Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)
+    ground = (0.5, 0., 0.02)#, Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)
+    wall1 = (2.99, 0, 1.5)#, Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)
+    wall2 = (-2.98, 0, 1.5)#, Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)
+    wall3 = (0, -1.98, 1.5)#, Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)
+    wall4 = (0, 1.99, 1.5)#, Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)
+    lidar_poses = [] #, ground, wall1, wall2, wall3, wall4]
 
-    lidar_data = createVisibility3D(gt_tree, LASER_RANGE, lidar_poses, rays, occupied)    
+    #keypoints = np.loadtxt(f"scene5.csv", delimiter=",")   
+    #plotSkeleton(gt_tree, ceiling, keypoints, LASER_RANGE)
+
+    lidar_data = createVisibility3D(gt_tree, LASER_RANGE, lidar_poses, rays, occupied) 
     
-    cam_poses = [ceiling]
-    cam_matrices = [np.array([[260, 0, 320], [0, 260, 240], [0, 0, 1]])]
+    cam_poses = [wall4]
+    cam_matrices = [np.array([[120/np.tan(45/2), 0, 120], [0, 80/np.tan(45/2), 80], [0, 0, 1]])]
     # cam_matrices = [np.array([[520, 0, 320], [0, 520, 240], [0, 0, 1]])]
     cam_rotation = [Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
     depthcam_data = depthCameraSensorData(gt_tree, cam_poses, cam_matrices, occupied, cam_rotation)
     
     # PADS poses - ((x_min, x_max), (y_min, y_max)) 
     pads = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
-    pad_data = padSensorData(pads, occupied)
+    pad_data =[] #padSensorData(pads, occupied)
 
     # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max)) 
     gates = [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
-    gates_data = gateSensorData(gates, occupied)
+    gates_data =[] #gateSensorData(gates, occupied)
 
     mergeSensorData(lidar_data, lidar_poses, depthcam_data, cam_poses, pad_data+gates_data)
 
