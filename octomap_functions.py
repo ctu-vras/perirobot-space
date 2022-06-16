@@ -3,6 +3,7 @@ import plotly.graph_objs as go
 import matplotlib.pyplot as plt
 import octomap
 
+from scipy.spatial.transform import Rotation
 
 RESOLUTION = 0.05  # m resolution of octomap
 LASER_RANGE = 10
@@ -203,18 +204,20 @@ def gateSensorData(poses, occupied):
     return points 
 
 
-def depthCameraSensorData(tree, poses, cam_matrices, occupied):
+def depthCameraSensorData(tree, poses, cam_matrices, occupied, rotations):
     visib = [set() for _ in range(len(poses))]
-    for pos, vis, cam_matrix in zip(poses, visib, cam_matrices):
+    for pos, vis, cam_matrix, rotation in zip(poses, visib, cam_matrices, rotations):
         rays = occupied - pos
         rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
         points = []
         pos = np.array(pos)
+        r_mat = rotation.as_matrix()
         for ray in rays:
             end = np.full((3,), np.nan)
             res = tree.castRay(pos, ray, end, True, LASER_RANGE)
-            if res:  
-                proj = cam_matrix@(end-pos)
+            if res:
+                end_trans = r_mat@end + pos
+                proj = cam_matrix@end_trans
                 proj /= proj[-1]
                 if (0 <= proj[0] <= 2*cam_matrix[0, 2] and
                     0 <= proj[1] <= 2*cam_matrix[1, 2]):
@@ -227,23 +230,23 @@ def depthCameraSensorData(tree, poses, cam_matrices, occupied):
 
 def mergeSensorData(lidar_data, lidar_poses, depthcam_data, depthcam_poses, pad_data):
     tree = octomap.OcTree(RESOLUTION)
-    for points, pose in zip(lidar_data, lidar_poses):
-        tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
+    # for points, pose in zip(lidar_data, lidar_poses):
+    #     tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
 
     for points, pose in zip(depthcam_data, depthcam_poses):
         tree.insertPointCloud(np.array(list(points)), np.array(pose), lazy_eval=True)
 
     tree.updateInnerOccupancy()
 
-    for points in pad_data:
-        for p in points:
-            # n = tree.search(p)
-            # try:
-            #     tree.isNodeOccupied(n)
-            # except:
-            tree.updateNode(p, True, lazy_eval=True)
+    # for points in pad_data:
+    #     for p in points:
+    #         # n = tree.search(p)
+    #         # try:
+    #         #     tree.isNodeOccupied(n)
+    #         # except:
+    #         tree.updateNode(p, True, lazy_eval=True)
 
-    tree.updateInnerOccupancy()
+    # tree.updateInnerOccupancy()
     
     saveModel(tree, 'pokus.bt')
 
@@ -280,9 +283,11 @@ if __name__ == "__main__":
 
     lidar_data = createVisibility3D(gt_tree, LASER_RANGE, lidar_poses, rays, occupied)    
     
-    cam_poses = [ground]
+    cam_poses = [ceiling]
     cam_matrices = [np.array([[260, 0, 320], [0, 260, 240], [0, 0, 1]])]
-    depthcam_data = depthCameraSensorData(gt_tree, cam_poses, cam_matrices, occupied)    
+    # cam_matrices = [np.array([[520, 0, 320], [0, 520, 240], [0, 0, 1]])]
+    cam_rotation = [Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
+    depthcam_data = depthCameraSensorData(gt_tree, cam_poses, cam_matrices, occupied, cam_rotation)
     
     # PADS poses - ((x_min, x_max), (y_min, y_max)) 
     pads = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
