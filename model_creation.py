@@ -168,7 +168,7 @@ def addHuman(filename, kpts, T):
     kpts_h = np.hstack((kpts, np.ones((kpts.shape[0],1))))
     keypoints = T @ kpts_h.T
     mesh.transform(T)
-    pcd = mesh.sample_points_poisson_disk(800)
+    pcd = mesh.sample_points_poisson_disk(80000)
     #o3d.visualization.draw_geometries([pcd])
     return np.asarray(pcd.points), np.round(keypoints[:3,:].T,2)
 
