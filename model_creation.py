@@ -196,7 +196,7 @@ if __name__ == "__main__":
           [0.5, -0.8, 0.3, 0, 0, np.pi]]  # human poses
 
     for i in range(7):
-        resolution = 0.01
+        resolution = 0.05
         model = octomap.OcTree(resolution)
         robot_model = octomap.OcTree(resolution)
         for p in robot:
@@ -212,13 +212,13 @@ if __name__ == "__main__":
             human_model.updateNode(p, True, lazy_eval=True)
             model.updateNode(p, True, lazy_eval=True)
 
-        os.makedirs(f'models/human{i}-exp1', exist_ok=True)
-        np.savetxt(f"models/human{i}-exp1/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
-        np.savez(f"models/human{i}-exp1/vars.npz", joints, T, Ts[i])
+        os.makedirs(f'models/human{i}-exp2', exist_ok=True)
+        np.savetxt(f"models/human{i}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+        np.savez(f"models/human{i}-exp2/vars.npz", joints, T, Ts[i])
         model.updateInnerOccupancy()
         human_model.updateInnerOccupancy()
         robot_model.updateInnerOccupancy()
 
-        model.writeBinary(f'models/human{i}-exp1/model.bt'.encode())
-        human_model.writeBinary(f'models/human{i}-exp1/human.bt'.encode())
-        robot_model.writeBinary(f'models/human{i}-exp1/robot.bt'.encode())
+        model.writeBinary(f'models/human{i}-exp2/model.bt'.encode())
+        human_model.writeBinary(f'models/human{i}-exp2/human.bt'.encode())
+        robot_model.writeBinary(f'models/human{i}-exp2/robot.bt'.encode())

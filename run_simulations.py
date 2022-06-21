@@ -23,7 +23,7 @@ def plot_skeleton(filename):
 
 
 if __name__ == "__main__":
-    folder = "human5-exp1"
+    folder = "human5-exp2"
 
     cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
     ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
@@ -34,21 +34,23 @@ if __name__ == "__main__":
     wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
     sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
-    boolean_mask_lidar = np.array([0, 1, 0, 0, 0, 0])
-    boolean_mask_rgbd = np.array([0, 0, 1, 0, 0, 0])
+    boolean_mask_lidar = np.array([1, 1, 1, 1, 1, 1])
+    boolean_mask_rgbd = np.array([0, 0, 0, 0, 0, 0])
 
     lidar_poses = sensors[boolean_mask_lidar == 1, 0]
     rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
     cam_rotations = sensors[boolean_mask_rgbd == 1, 1]
-    cam_matrices = [cam_matrix * np.sum(boolean_mask_rgbd)]
-
-    resolution = 0.02
+    cam_matrices = []
+    for i in range(np.sum(boolean_mask_rgbd)):
+        cam_matrices.append(cam_matrix)
+    
+    resolution = 0.05
     output_name = "pokus"
 
     # PADS poses - ((x_min, x_max), (y_min, y_max))
-    pad_poses = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
+    pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
     # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
-    gate_poses = [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
+    gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
 
     proximity_poses = []
     proximity_rays = []
@@ -61,6 +63,6 @@ if __name__ == "__main__":
                            proximity_rays=proximity_rays, robot_inflation_value=robot_inflation_value,
                            proximity_range=proximity_range, lidar_range=lidar_range)
 
-    simulation.process_sensors()
+    simulation.process_sensors(compute_statistics=True)
 
-    plot_skeleton(f"results/{output_name}/keypoints0")
+    # plot_skeleton(f"results/{output_name}/keypoints0")

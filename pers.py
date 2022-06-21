@@ -2,9 +2,11 @@ import numpy as np
 import octomap
 from scipy import ndimage as ndi
 import os
+import trimesh
 
 
-def get_occupied_voxels(tree, res):
+def get_occupied_voxels(tree):
+    res = tree.getResolution()
     occupied = []
     empty = []
     for it in tree.begin_leafs():
@@ -19,9 +21,9 @@ def get_occupied_voxels(tree, res):
         else:
             empty.append(points)
 
-    occupied = np.concatenate(occupied, axis=0)
+    occupied = np.round(np.concatenate(occupied, axis=0), 3)
     if empty:
-        empty = np.concatenate(empty, axis=0)
+        empty = np.round(np.concatenate(empty, axis=0), 3)
 
     return occupied, empty
 
@@ -57,7 +59,7 @@ def create_sphere(res=2, res2=2):
 
 
 class Pers:
-    def __init__(self, folder, resolution=0.01, output_name="blah.bt", lidar_poses=None, rgbd_poses=None,
+    def __init__(self, folder, resolution=0.01, output_name="blah", lidar_poses=None, rgbd_poses=None,
                  pad_poses=None, gate_poses=None, proximity_poses=None, cam_matrices=None, cam_rotations=None,
                  proximity_rays=None, robot_inflation_value=0.5, proximity_range=10, lidar_range=10):
         self.lidar_poses = lidar_poses
@@ -70,12 +72,12 @@ class Pers:
         self.folder = folder
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
-        self.occupied, self.empty = get_occupied_voxels(self.gt_model, self.res)
-        self.output_name = "results/"+ output_name
+        self.occupied, self.empty = get_occupied_voxels(self.gt_model)
+        self.output_name = "results/" + output_name + "/"
         os.makedirs(self.output_name, exist_ok=True)
-        
+
         self.human_model = octomap.OcTree(self.res)
-        self.human_model.readBinary(f"models/{folder}/human.bt".encode())
+        self.human_model.readBinary(f"models/{self.folder}/human.bt".encode())
         self.robot_model = octomap.OcTree(self.res)
         self.robot_model.readBinary(f"models/{self.folder}/robot.bt".encode())
         self.lidar_range = lidar_range
@@ -126,7 +128,7 @@ class Pers:
             rays = self.keypoints - pos
             rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
             pts = np.round(np.array(self.ray_cast(rays, pos, self.lidar_range)), 2)
-            np.savetxt(f"{self.output_name}/keypoints{idx}.csv", pts, fmt='%1.2f', delimiter=",")
+            np.savetxt(f"{self.output_name}keypoints{idx}.csv", pts, fmt='%1.2f', delimiter=",")
 
     def lidar_sensor_data(self):
         points = [set() for _ in range(len(self.lidar_poses))]
@@ -161,10 +163,10 @@ class Pers:
 
     def proximity_robot_sensor_data(self):
         res = self.res / 2
-        human_occupied, _ = get_occupied_voxels(self.human_model, res)
+        human_occupied, _ = get_occupied_voxels(self.human_model)
         mins = self.robot_model.getMetricMin() - self.robot_inflation_value
         dims = ((self.robot_model.getMetricSize() + 2 * self.robot_inflation_value + res) / res).astype(int)
-        robot_occupied, _ = get_occupied_voxels(self.robot_model, res)
+        robot_occupied, _ = get_occupied_voxels(self.robot_model)
         coordinates = np.floor((robot_occupied - mins) / res).astype(int)
 
         image = np.zeros(dims, dtype=int)
@@ -177,38 +179,97 @@ class Pers:
         b = set((tuple(np.round(i, 2)) for i in human_occupied))
         return np.array(list(a.intersection(b)))
 
-    def process_sensors(self):
+    def get_robot_workspace_points(self):
+        robot_base = np.array([0, 0, 1])
+        aabb_min = self.gt_model.getMetricMin()
+        aabb_max = self.gt_model.getMetricMax()
+        center = (aabb_min + aabb_max) / 2
+        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
+        origin = center - dimension / 2 * self.res
+        grid = np.full(dimension, -1, np.int32)
+        transform = trimesh.transformations.scale_and_translate(
+            scale=self.res, translate=origin
+        )
+        points = trimesh.voxel.VoxelGrid(encoding=grid, transform=transform).points
+        # sphere around robot - maybe remove robot?
+        points = points[np.linalg.norm(points - robot_base, axis=1) < 1.5, :]
+        return points
+
+    def get_human_points(self):
+        aabb_min = self.human_model.getMetricMin() - np.array([0.5, 0.5, 0])
+        aabb_max = self.human_model.getMetricMax() + 0.5
+        center = (aabb_min + aabb_max) / 2
+        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
+        origin = center - dimension / 2 * self.res
+        grid = np.full(dimension, -1, np.int32)
+        transform = trimesh.transformations.scale_and_translate(
+            scale=self.res, translate=origin
+        )
+        points = trimesh.voxel.VoxelGrid(encoding=grid, transform=transform).points
+        return points
+
+    def compute_metric(self, points, covered_model, ratio=0.01):
+        gt_labels = self.gt_model.getLabels(points).flatten()  # 1 occupied, -1 free
+        covered_labels = covered_model.getLabels(points).flatten()  # 1 occupied, 0 free, -1 unknown
+        true_occupied = np.sum((gt_labels == 1) & (covered_labels == 1))
+        false_occupied = np.sum((gt_labels == 1) & (covered_labels == 0))
+        unknown_occupied = np.sum((gt_labels == 1) & (covered_labels == -1))
+
+        true_empty = np.sum((gt_labels == -1) & (covered_labels == 0))
+        false_empty = np.sum((gt_labels == -1) & (covered_labels == 1))
+        unknown_empty = np.sum((gt_labels == -1) & (covered_labels == -1))
+
+        coverage_score = (true_occupied - false_occupied + ratio * true_empty - false_empty) / (
+                    np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
+        print("(true_occupied - false_occupied + ratio * true_empty - false_empty) / (gt_occupied + ratio * gt_free)")
+        print(f"({true_occupied} - {false_occupied} + {ratio} * {true_empty} - {false_empty}) / "
+              f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
+        print(f"Score = {coverage_score}")
+        print(f"Unknown occupied = {unknown_occupied}; unknown empty = {unknown_empty}")
+        return coverage_score
+
+    def compute_statistics(self, covered_model):
+        points = self.get_robot_workspace_points()
+        score_workspace = self.compute_metric(points, covered_model)
+        points = self.get_human_points()
+        score_human = self.compute_metric(points, covered_model)
+        # TODO: compare original human bounding box and bounding box of the keypoints
+
+    def process_sensors(self, compute_statistics=False, detect_keypoints=False):
         covered_model = octomap.OcTree(self.res)
 
         data = self.lidar_sensor_data()
         for points, pos in zip(data, self.lidar_poses):
-            covered_model.insertPointCloud(np.array(list(points)), np.array(pos), lazy_eval=True)#
+            covered_model.insertPointCloud(np.array(list(points)), np.array(pos), lazy_eval=True)  #
         covered_model.updateInnerOccupancy()
-        save_model(covered_model, self.res, self.output_name+"/lidar")
-        
+        save_model(covered_model, self.res, self.output_name + "lidar")
+
         data = self.rgbd_camera_sensor_data()
         for points, pos in zip(data, self.rgbd_poses):
             covered_model.insertPointCloud(np.array(list(points)), np.array(pos), lazy_eval=True)
         covered_model.updateInnerOccupancy()
-        save_model(covered_model, self.res, self.output_name+"/lidar_rgbd")
+        save_model(covered_model, self.res, self.output_name + "lidar_rgbd")
 
         data = self.proximity_sensor_data()
         for points, pos in zip(data, self.proximity_poses):
             covered_model.insertPointCloud(np.array(list(points)), np.array(pos), lazy_eval=True)
         covered_model.updateInnerOccupancy()
-        save_model(covered_model, self.res, self.output_name+"/lidar_rgbd_prox")
+        save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox")
 
         data = self.area_sensor_data()
         for points in data:
             for p in points:
                 covered_model.updateNode(p, True, lazy_eval=True)
         covered_model.updateInnerOccupancy()
-        save_model(covered_model, self.res, self.output_name+"/lidar_rgbd_prox_area")
+        save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox_area")
 
         data = self.proximity_robot_sensor_data()
         for point in data:
             covered_model.updateNode(point, True, lazy_eval=True)  # TODO raycasting
 
         covered_model.updateInnerOccupancy()
-        save_model(covered_model, self.res, self.output_name+"/final")
-        self.detect_keypoints()
+        save_model(covered_model, self.res, self.output_name + "final")
+        if detect_keypoints:
+            self.detect_keypoints()
+        if compute_statistics:
+            self.compute_statistics(covered_model)
