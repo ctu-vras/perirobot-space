@@ -341,7 +341,7 @@ def proximityRobot(inflation_value, folder):
 
 
 if __name__ == "__main__":
-    folder = "human5-exp1"
+    folder = "human0-exp2"
     rays = createSphere(res=1, res2=1)  # not used when "occupied" voxels are sent to createVisibility3D function
     gt_tree = octomap.OcTree(RESOLUTION)
     gt_tree.readBinary((f"models/{folder}/model.bt").encode())
@@ -362,7 +362,7 @@ if __name__ == "__main__":
 
     lidar_data = createVisibility3D(gt_tree, LASER_RANGE, lidar_poses, rays, occupied)
 
-    cam_poses = []
+    cam_poses = [wall1]
     cam_matrices = [np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])]
     # cam_matrices = [np.array([[520, 0, 320], [0, 520, 240], [0, 0, 1]])]
     cam_rotation = [Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]

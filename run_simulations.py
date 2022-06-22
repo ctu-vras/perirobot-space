@@ -34,8 +34,8 @@ if __name__ == "__main__":
     wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
     sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
-    boolean_mask_lidar = np.array([1, 1, 1, 1, 1, 1])
-    boolean_mask_rgbd = np.array([0, 0, 0, 0, 0, 0])
+    boolean_mask_lidar = np.array([0, 0, 0, 0, 0, 0])
+    boolean_mask_rgbd = np.array([0, 0, 1, 0, 0, 0])
 
     lidar_poses = sensors[boolean_mask_lidar == 1, 0]
     rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     for i in range(np.sum(boolean_mask_rgbd)):
         cam_matrices.append(cam_matrix)
     
-    resolution = 0.05
+    resolution = 0.05  # resolution for 5 cm -> 2 cm
     output_name = "pokus"
 
     # PADS poses - ((x_min, x_max), (y_min, y_max))
@@ -63,6 +63,6 @@ if __name__ == "__main__":
                            proximity_rays=proximity_rays, robot_inflation_value=robot_inflation_value,
                            proximity_range=proximity_range, lidar_range=lidar_range)
 
-    simulation.process_sensors(compute_statistics=True)
+    simulation.process_sensors(compute_statistics=True, detect_keypoints=True)
 
-    # plot_skeleton(f"results/{output_name}/keypoints0")
+    plot_skeleton(f"results/{output_name}/keypoints0")

@@ -67,7 +67,7 @@ class Pers:
         self.area_poses = gate_poses
         self.proximity_poses = proximity_poses
         for pos in pad_poses:
-            self.area_poses.append((pos[0], pos[1], (0.01, 0.02)))
+            self.area_poses.append((pos[0], pos[1], (0.05, 0.06)))
         self.res = resolution
         self.folder = folder
         self.gt_model = octomap.OcTree(self.res)
@@ -229,8 +229,10 @@ class Pers:
         return coverage_score
 
     def compute_statistics(self, covered_model):
+        print("Robot Workspace\n---------------")
         points = self.get_robot_workspace_points()
         score_workspace = self.compute_metric(points, covered_model)
+        print("\n---------------\nHuman\n---------------")
         points = self.get_human_points()
         score_human = self.compute_metric(points, covered_model)
         # TODO: compare original human bounding box and bounding box of the keypoints

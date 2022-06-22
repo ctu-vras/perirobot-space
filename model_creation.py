@@ -195,8 +195,8 @@ if __name__ == "__main__":
           [0.3, -0.8, 0, 0, 0, 0], [0.3, -0.8, 0, 0, 0, np.pi / 2], [0.2, -0.8, 0, 0, 0, np.pi],
           [0.5, -0.8, 0.3, 0, 0, np.pi]]  # human poses
 
+    resolution = 0.05  # resolution for 5 cm -> 2 cm
     for i in range(7):
-        resolution = 0.05
         model = octomap.OcTree(resolution)
         robot_model = octomap.OcTree(resolution)
         for p in robot:
@@ -222,3 +222,21 @@ if __name__ == "__main__":
         model.writeBinary(f'models/human{i}-exp2/model.bt'.encode())
         human_model.writeBinary(f'models/human{i}-exp2/human.bt'.encode())
         robot_model.writeBinary(f'models/human{i}-exp2/robot.bt'.encode())
+
+    model = octomap.OcTree(resolution)
+    robot_model = octomap.OcTree(resolution)
+    for p in robot:
+        robot_model.updateNode(p, True, lazy_eval=True)
+        model.updateNode(p, True, lazy_eval=True)
+    for p in cell:
+        model.updateNode(p, True, lazy_eval=True)
+    for p in table:
+        model.updateNode(p, True, lazy_eval=True)
+
+    os.makedirs(f'models/nohuman-exp2', exist_ok=True)
+    # np.savez(f"models/nohuman-exp2/vars.npz", joints, T, Ts[i])
+    model.updateInnerOccupancy()
+    robot_model.updateInnerOccupancy()
+
+    model.writeBinary(f'models/nohuman-exp2/model.bt'.encode())
+    robot_model.writeBinary(f'models/nohuman-exp2/robot.bt'.encode())
