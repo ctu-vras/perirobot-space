@@ -4,6 +4,7 @@ import octomap
 import os
 import trimesh
 
+from datetime import datetime
 from scipy import ndimage as ndi
 
 
@@ -64,6 +65,7 @@ class Pers:
     def __init__(self, folder, resolution=0.01, output_name="blah", lidar_poses=None, rgbd_poses=None,
                  pad_poses=None, gate_poses=None, proximity_poses=None, cam_matrices=None, cam_rotations=None,
                  proximity_rays=None, robot_inflation_value=0.5, proximity_range=10, lidar_range=10):
+        self.time_stamp = datetime.now()
         self.lidar_poses = lidar_poses
         self.rgbd_poses = rgbd_poses
         self.area_poses = gate_poses
@@ -75,7 +77,7 @@ class Pers:
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
         self.occupied, self.empty = get_occupied_voxels(self.gt_model)
-        self.output_name = "results/" + output_name + "/"
+        self.output_name = "results/" + '_'.join([self.time_stamp.strftime("%y%m%d%H%M"), output_name, folder]) + "/"
         os.makedirs(self.output_name, exist_ok=True)
 
         self.human_model = octomap.OcTree(self.res)
@@ -93,11 +95,12 @@ class Pers:
 
     def export_params_json(self):
         json_dict = {
-            'gt_model_name': str(folder),
+            'gt_model_name': str(self.folder),
             'lidar_poses': str(self.lidar_poses),
             'rgbd_poses': str(self.rgbd_poses),
             'gate_poses': str(self.area_poses),
             'proximity_poses': str(self.proximity_poses),
+            'time_stamp': self.time_stamp.strftime('%D-%H:%M')
         }
         with open(self.output_name + 'params.json', 'w') as outfile:
             json.dump(json_dict, outfile)

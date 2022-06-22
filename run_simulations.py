@@ -45,7 +45,7 @@ if __name__ == "__main__":
         cam_matrices.append(cam_matrix)
     
     resolution = 0.05  # resolution for 5 cm -> 2 cm
-    output_name = "pokus_"+folder
+    output_name = "pokus_"
 
     # PADS poses - ((x_min, x_max), (y_min, y_max))
     pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
