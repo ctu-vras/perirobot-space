@@ -13,4 +13,8 @@ Octomap-python should be also installed, see [GitHub Kentaro Project](https://gi
 ## Running
 `model_creation.py` - creates model of the robot and human
 
-`octomap_functions.py` - runs the occupacy generating code and possibly visualization
+`pers.py` - the class with the perirobot space properties
+
+`run_simulations.py` - code to run the simulation with the set parameters
+
+`octomap_functions.py` - deprecated

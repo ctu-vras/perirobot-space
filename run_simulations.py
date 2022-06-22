@@ -65,4 +65,4 @@ if __name__ == "__main__":
 
     simulation.process_sensors(compute_statistics=True, detect_keypoints=True)
 
-    plot_skeleton(f"results/{output_name}/keypoints0")
+    # plot_skeleton(f"results/{output_name}/keypoints0")
