@@ -45,7 +45,7 @@ if __name__ == "__main__":
         cam_matrices.append(cam_matrix)
     
     resolution = 0.05  # resolution for 5 cm -> 2 cm
-    output_name = "pokus"
+    output_name = "pokus_"+folder
 
     # PADS poses - ((x_min, x_max), (y_min, y_max))
     pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
@@ -63,6 +63,6 @@ if __name__ == "__main__":
                            proximity_rays=proximity_rays, robot_inflation_value=robot_inflation_value,
                            proximity_range=proximity_range, lidar_range=lidar_range)
 
-    simulation.process_sensors(compute_statistics=True, detect_keypoints=True)
+    simulation.process_sensors(compute_statistics=True, detect_keypoints=True, save_stats=True)
 
     # plot_skeleton(f"results/{output_name}/keypoints0")

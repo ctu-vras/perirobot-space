@@ -1,8 +1,10 @@
+import json
 import numpy as np
 import octomap
-from scipy import ndimage as ndi
 import os
 import trimesh
+
+from scipy import ndimage as ndi
 
 
 def get_occupied_voxels(tree):
@@ -88,6 +90,17 @@ class Pers:
         self.proximity_range = proximity_range
         self.robot_inflation_value = robot_inflation_value
         self.keypoints = np.loadtxt(f"models/{self.folder}/keypoints.csv", delimiter=",")
+
+    def export_params_json(self):
+        json_dict = {
+            'gt_model_name': str(folder),
+            'lidar_poses': str(self.lidar_poses),
+            'rgbd_poses': str(self.rgbd_poses),
+            'gate_poses': str(self.area_poses),
+            'proximity_poses': str(self.proximity_poses),
+        }
+        with open(self.output_name + 'params.json', 'w') as outfile:
+            json.dump(json_dict, outfile)
 
     def area_sensor_data(self):
         points = []
@@ -226,18 +239,20 @@ class Pers:
               f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
         print(f"Score = {coverage_score}")
         print(f"Unknown occupied = {unknown_occupied}; unknown empty = {unknown_empty}")
-        return coverage_score
+        return coverage_score, unknown_occupied, unknown_empty
 
-    def compute_statistics(self, covered_model):
+    def compute_statistics(self, covered_model, save_stats):
         print("Robot Workspace\n---------------")
         points = self.get_robot_workspace_points()
         score_workspace = self.compute_metric(points, covered_model)
         print("\n---------------\nHuman\n---------------")
         points = self.get_human_points()
         score_human = self.compute_metric(points, covered_model)
+        if save_stats:
+            np.savetxt(self.output_name + "stats.csv", [score_workspace + score_human], delimiter=", ", fmt="%10.5f")
         # TODO: compare original human bounding box and bounding box of the keypoints
 
-    def process_sensors(self, compute_statistics=False, detect_keypoints=False):
+    def process_sensors(self, compute_statistics=False, detect_keypoints=False, save_stats=False):
         covered_model = octomap.OcTree(self.res)
 
         data = self.lidar_sensor_data()
@@ -271,7 +286,10 @@ class Pers:
 
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "final")
+
+        self.export_params_json()
+
         if detect_keypoints:
             self.detect_keypoints()
         if compute_statistics:
-            self.compute_statistics(covered_model)
+            self.compute_statistics(covered_model, save_stats)
