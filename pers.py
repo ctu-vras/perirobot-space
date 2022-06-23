@@ -77,7 +77,7 @@ class Pers:
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
         self.occupied, self.empty = get_occupied_voxels(self.gt_model)
-        self.output_name = "results/" + '_'.join([self.time_stamp.strftime("%y%m%d%H%M"), output_name, folder]) + "/"
+        self.output_name = "results/" + folder + "/" + output_name + "/"
         os.makedirs(self.output_name, exist_ok=True)
 
         self.human_model = octomap.OcTree(self.res)

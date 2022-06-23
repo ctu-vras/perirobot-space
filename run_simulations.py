@@ -1,4 +1,6 @@
 from scipy.spatial.transform import Rotation
+from datetime import datetime
+
 import numpy as np
 import plotly.graph_objs as go
 import pers
@@ -23,46 +25,55 @@ def plot_skeleton(filename):
 
 
 if __name__ == "__main__":
-    folder = "human5-exp2"
+    experiments = ["human0-exp2",
+                   "human1-exp2",
+                   # "human2-exp2",
+                   # "human3-exp2",
+                   # "human4-exp2",
+                   # "human5-exp2",
+                   # "human6-exp2",
+                   # "nohuman-exp2",
+                   ]
 
-    cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
-    ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
-    ground = [(0.5, 0., 0.02), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
-    wall1 = [(2.99, 0, 1.5), Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)]
-    wall2 = [(-2.98, 0, 1.5), Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)]
-    wall3 = [(0, -1.98, 1.5), Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)]
-    wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
-    sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
+    for folder in experiments:
+        cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
+        ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
+        ground = [(0.5, 0., 0.02), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
+        wall1 = [(2.99, 0, 1.5), Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)]
+        wall2 = [(-2.98, 0, 1.5), Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)]
+        wall3 = [(0, -1.98, 1.5), Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)]
+        wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
+        sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
-    boolean_mask_lidar = np.array([0, 0, 0, 0, 0, 0])
-    boolean_mask_rgbd = np.array([0, 0, 1, 0, 0, 0])
+        boolean_mask_lidar = np.array([0, 0, 0, 0, 0, 0])
+        boolean_mask_rgbd = np.array([0, 0, 1, 0, 0, 0])
 
-    lidar_poses = sensors[boolean_mask_lidar == 1, 0]
-    rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
-    cam_rotations = sensors[boolean_mask_rgbd == 1, 1]
-    cam_matrices = []
-    for i in range(np.sum(boolean_mask_rgbd)):
-        cam_matrices.append(cam_matrix)
-    
-    resolution = 0.05  # resolution for 5 cm -> 2 cm
-    output_name = "pokus_"
+        lidar_poses = sensors[boolean_mask_lidar == 1, 0]
+        rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
+        cam_rotations = sensors[boolean_mask_rgbd == 1, 1]
+        cam_matrices = []
+        for i in range(np.sum(boolean_mask_rgbd)):
+            cam_matrices.append(cam_matrix)
 
-    # PADS poses - ((x_min, x_max), (y_min, y_max))
-    pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
-    # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
-    gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
+        resolution = 0.05  # resolution for 5 cm -> 2 cm
+        output_name = datetime.now().strftime("%y%m%d%H%M")
 
-    proximity_poses = []
-    proximity_rays = []
-    robot_inflation_value = 0.3  # robot proximity inflation in meters
-    proximity_range = 10  # max distance detected by ray proximity sensor
-    lidar_range = 10  # max distance detected by lidar (fish-eye) sensor
-    simulation = pers.Pers(folder, resolution=resolution, output_name=output_name, lidar_poses=lidar_poses,
-                           rgbd_poses=rgbd_poses, pad_poses=pad_poses, gate_poses=gate_poses,
-                           proximity_poses=proximity_poses, cam_matrices=cam_matrices, cam_rotations=cam_rotations,
-                           proximity_rays=proximity_rays, robot_inflation_value=robot_inflation_value,
-                           proximity_range=proximity_range, lidar_range=lidar_range)
+        # PADS poses - ((x_min, x_max), (y_min, y_max))
+        pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
+        # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
+        gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
 
-    simulation.process_sensors(compute_statistics=True, detect_keypoints=True, save_stats=True)
+        proximity_poses = []
+        proximity_rays = []
+        robot_inflation_value = 0.3  # robot proximity inflation in meters
+        proximity_range = 10  # max distance detected by ray proximity sensor
+        lidar_range = 10  # max distance detected by lidar (fish-eye) sensor
+        simulation = pers.Pers(folder, resolution=resolution, output_name=output_name, lidar_poses=lidar_poses,
+                               rgbd_poses=rgbd_poses, pad_poses=pad_poses, gate_poses=gate_poses,
+                               proximity_poses=proximity_poses, cam_matrices=cam_matrices, cam_rotations=cam_rotations,
+                               proximity_rays=proximity_rays, robot_inflation_value=robot_inflation_value,
+                               proximity_range=proximity_range, lidar_range=lidar_range)
 
-    # plot_skeleton(f"results/{output_name}/keypoints0")
+        simulation.process_sensors(compute_statistics=True, detect_keypoints=True, save_stats=True)
+
+        # plot_skeleton(f"results/{output_name}/keypoints0")
