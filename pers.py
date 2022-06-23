@@ -77,7 +77,7 @@ class Pers:
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
         self.occupied, self.empty = get_occupied_voxels(self.gt_model)
-        self.output_name = "results/" + folder + "/" + output_name + "/"
+        self.output_name = "results/" + output_name + "/" + folder + "/"
         os.makedirs(self.output_name, exist_ok=True)
 
         self.human_model = octomap.OcTree(self.res)
@@ -252,7 +252,11 @@ class Pers:
         points = self.get_human_points()
         score_human = self.compute_metric(points, covered_model)
         if save_stats:
-            np.savetxt(self.output_name + "stats.csv", [score_workspace + score_human], delimiter=", ", fmt="%10.5f")
+            np.savetxt(self.output_name + "stats.csv",
+                       [tuple([self.folder]) + score_workspace + score_human],
+                       delimiter=", ",
+                       fmt="%s")
+
         # TODO: compare original human bounding box and bounding box of the keypoints
 
     def process_sensors(self, compute_statistics=False, detect_keypoints=False, save_stats=False):
