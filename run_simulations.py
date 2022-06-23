@@ -46,7 +46,7 @@ if __name__ == "__main__":
         sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
         boolean_mask_lidar = np.array([0, 0, 0, 0, 0, 0])
-        boolean_mask_rgbd = np.array([0, 0, 1, 0, 0, 0])
+        boolean_mask_rgbd = np.array([1, 0, 0, 0, 0, 0])
 
         lidar_poses = sensors[boolean_mask_lidar == 1, 0]
         rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
