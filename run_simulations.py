@@ -26,12 +26,12 @@ def plot_skeleton(filename):
 
 if __name__ == "__main__":
     experiments = ["human0-exp2",
-                   "human1-exp2",
-                   "human2-exp2",
-                   "human3-exp2",
-                   "human4-exp2",
-                   "human5-exp2",
-                   "human6-exp2",
+                   # "human1-exp2",
+                   # "human2-exp2",
+                   # "human3-exp2",
+                   # "human4-exp2",
+                   # "human5-exp2",
+                   # "human6-exp2",
                    # "nohuman-exp2",
                    ]
 

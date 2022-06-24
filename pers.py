@@ -11,7 +11,7 @@ from scipy import ndimage as ndi
 def get_occupied_voxels(tree):
     res = tree.getResolution()
     occupied = []
-    empty = []
+    free = []
     for it in tree.begin_leafs():
         center = it.getCoordinate()
         dimension = max(1, round(it.getSize() / res))
@@ -22,13 +22,13 @@ def get_occupied_voxels(tree):
         if tree.isNodeOccupied(it):
             occupied.append(points)
         else:
-            empty.append(points)
+            free.append(points)
 
     occupied = np.round(np.concatenate(occupied, axis=0), 3)
-    if empty:
-        empty = np.round(np.concatenate(empty, axis=0), 3)
+    if free:
+        free = np.round(np.concatenate(free, axis=0), 3)
 
-    return occupied, empty
+    return occupied, free
 
 
 def save_model(tree, res, filename):
@@ -76,7 +76,7 @@ class Pers:
         self.folder = folder
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
-        self.occupied, self.empty = get_occupied_voxels(self.gt_model)
+        self.occupied, self.free = get_occupied_voxels(self.gt_model)
         self.output_name = "results/" + output_name + "/" + folder + "/"
         os.makedirs(self.output_name, exist_ok=True)
 
@@ -231,18 +231,18 @@ class Pers:
         false_occupied = np.sum((gt_labels == 1) & (covered_labels == 0))
         unknown_occupied = np.sum((gt_labels == 1) & (covered_labels == -1))
 
-        true_empty = np.sum((gt_labels == -1) & (covered_labels == 0))
-        false_empty = np.sum((gt_labels == -1) & (covered_labels == 1))
-        unknown_empty = np.sum((gt_labels == -1) & (covered_labels == -1))
+        true_free = np.sum((gt_labels == -1) & (covered_labels == 0))
+        false_free = np.sum((gt_labels == -1) & (covered_labels == 1))
+        unknown_free = np.sum((gt_labels == -1) & (covered_labels == -1))
 
-        coverage_score = (true_occupied - false_occupied + ratio * true_empty - false_empty) / (
-                    np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
-        print("(true_occupied - false_occupied + ratio * true_empty - false_empty) / (gt_occupied + ratio * gt_free)")
-        print(f"({true_occupied} - {false_occupied} + {ratio} * {true_empty} - {false_empty}) / "
+        coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
+        import ipdb; ipdb.set_trace()
+        print("(true_occupied - false_occupied + ratio * true_free - false_free) / (gt_occupied + ratio * gt_free)")
+        print(f"({true_occupied} - {false_occupied} + {ratio} * {true_free} - {false_free}) / "
               f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
         print(f"Score = {coverage_score}")
-        print(f"Unknown occupied = {unknown_occupied}; unknown empty = {unknown_empty}")
-        return coverage_score, unknown_occupied, unknown_empty
+        print(f"Unknown occupied = {unknown_occupied}; unknown free = {unknown_free}")
+        return coverage_score, unknown_occupied, unknown_free
 
     def compute_statistics(self, covered_model, save_stats):
         print("Robot Workspace\n---------------")
