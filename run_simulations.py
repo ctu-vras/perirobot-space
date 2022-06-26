@@ -26,14 +26,15 @@ def plot_skeleton(filename):
 
 if __name__ == "__main__":
     experiments = ["human0-exp2",
-                   # "human1-exp2",
-                   # "human2-exp2",
-                   # "human3-exp2",
-                   # "human4-exp2",
-                   # "human5-exp2",
-                   # "human6-exp2",
+                   "human1-exp2",
+                   "human2-exp2",
+                   "human3-exp2",
+                   "human4-exp2",
+                   "human5-exp2",
+                   "human6-exp2",
                    # "nohuman-exp2",
                    ]
+    output_name = datetime.now().strftime("%y%m%d%H%M")
 
     for folder in experiments:
         cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
@@ -46,7 +47,7 @@ if __name__ == "__main__":
         sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
         boolean_mask_lidar = np.array([0, 0, 0, 0, 0, 0])
-        boolean_mask_rgbd = np.array([1, 0, 0, 0, 0, 0])
+        boolean_mask_rgbd = np.array([0, 0, 0, 0, 0, 0])
 
         lidar_poses = sensors[boolean_mask_lidar == 1, 0]
         rgbd_poses = sensors[boolean_mask_rgbd == 1, 0]
@@ -56,10 +57,9 @@ if __name__ == "__main__":
             cam_matrices.append(cam_matrix)
 
         resolution = 0.05  # resolution for 5 cm -> 2 cm
-        output_name = datetime.now().strftime("%y%m%d%H%M")
 
         # PADS poses - ((x_min, x_max), (y_min, y_max))
-        pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
+        pad_poses = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
         # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
         gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
 
