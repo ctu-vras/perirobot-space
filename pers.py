@@ -238,6 +238,7 @@ class Pers:
         coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
         tpr_occupied = true_occupied / np.sum(gt_labels == 1)
         tpr_free = true_free / np.sum(gt_labels == -1)
+        # fnr = fn / n
         # print("(true_occupied - false_occupied + ratio * true_free - false_free) / (gt_occupied + ratio * gt_free)")
         # print(f"({true_occupied} - {false_occupied} + {ratio} * {true_free} - {false_free}) / "
         #       f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
@@ -246,10 +247,11 @@ class Pers:
         return coverage_score, unknown_occupied, unknown_free, tpr_occupied, tpr_free
 
     def compute_statistics(self, covered_model, save_stats):
-        print("Robot Workspace\n---------------")
+        print(self.folder)
+        # print("Robot Workspace\n---------------")
         points = self.get_robot_workspace_points()
         score_workspace = self.compute_metric(points, covered_model)
-        print("\n---------------\nHuman\n---------------")
+        # print("\n---------------\nHuman\n---------------")
         points = self.get_human_points()
         score_human = self.compute_metric(points, covered_model)
         if save_stats:
