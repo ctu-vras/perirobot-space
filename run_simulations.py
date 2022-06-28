@@ -59,7 +59,7 @@ if __name__ == "__main__":
         resolution = 0.05  # resolution for 5 cm -> 2 cm
 
         # PADS poses - ((x_min, x_max), (y_min, y_max))
-        pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
+        pad_poses = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
         # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
         gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
 

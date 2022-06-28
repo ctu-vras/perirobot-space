@@ -238,13 +238,14 @@ class Pers:
         coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
         tpr_occupied = true_occupied / np.sum(gt_labels == 1)
         tpr_free = true_free / np.sum(gt_labels == -1)
-        # fnr = fn / n
+        fpr_occupied = false_free / np.sum(gt_labels == -1)
+        fpr_free = false_occupied / np.sum(gt_labels == 1)
         # print("(true_occupied - false_occupied + ratio * true_free - false_free) / (gt_occupied + ratio * gt_free)")
         # print(f"({true_occupied} - {false_occupied} + {ratio} * {true_free} - {false_free}) / "
         #       f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
         # print(f"Score = {coverage_score}")
         # print(f"Unknown occupied = {unknown_occupied}; unknown free = {unknown_free}")
-        return coverage_score, unknown_occupied, unknown_free, tpr_occupied, tpr_free
+        return coverage_score, unknown_occupied, unknown_free, tpr_occupied, tpr_free, fpr_occupied, fpr_free
 
     def compute_statistics(self, covered_model, save_stats):
         print(self.folder)

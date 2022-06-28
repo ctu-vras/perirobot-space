@@ -6,7 +6,7 @@ import sys
 
 if __name__ == "__main__":
     try:
-        experiment_names = sys.argv[1]
+        experiment_names = [sys.argv[1]]
     except IndexError:
         experiment_names = [
                             'cam_ceil',
@@ -20,9 +20,11 @@ if __name__ == "__main__":
     dtypes = {"use_case": 'str', "robot_score": np.dtype('f4'),
               "robot_unkwn_occupied": np.dtype('f4'), "robot_unkwn_empty": np.dtype('f4'),
               "robot_tpr_occupied": np.dtype('f4'), "robot_tpr_free": np.dtype('f4'),
+              "robot_fpr_occupied": np.dtype('f4'), "robot_fpr_free": np.dtype('f4'),
               "human_score": np.dtype('f4'), "human_unkwn_occupied": np.dtype('f4'),
               "human_unkwn_empty": np.dtype('f4'),
-              "human_tpr_occupied": np.dtype('f4'), "human_tpr_free": np.dtype('f4')}
+              "human_tpr_occupied": np.dtype('f4'), "human_tpr_free": np.dtype('f4'),
+              "human_fpr_occupied": np.dtype('f4'), "human_fpr_free": np.dtype('f4')}
     col_names = dtypes.keys()
     keys = [x for x in dtypes.keys()]
 
@@ -48,7 +50,6 @@ if __name__ == "__main__":
             import ipdb; ipdb.set_trace()
 
         print(df)
-        print(df.describe().iloc[1, :])
         means.to_latex(experiment_path + '/description.tex')
 
     report_df.to_latex('results/description.tex')
