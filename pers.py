@@ -92,6 +92,8 @@ class Pers:
         self.proximity_range = proximity_range
         self.robot_inflation_value = robot_inflation_value
         self.keypoints = np.loadtxt(f"models/{self.folder}/keypoints.csv", delimiter=",")
+        self.skeleton_lines = [[0, 1], [0, 2], [1, 3], [2, 4], [5, 6], [5, 7], [6, 8], [7, 9], [8, 10], [0, 11],
+                               [0, 12], [11, 13], [12, 14], [13, 15], [14, 16]]
 
     def export_params_json(self):
         json_dict = {
@@ -140,11 +142,34 @@ class Pers:
         return points
 
     def detect_keypoints(self):
+        scores = np.zeros((len(self.rgbd_poses), 4))
         for idx, pos in enumerate(self.rgbd_poses):
             rays = self.keypoints - pos
             rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
             pts = np.round(np.array(self.ray_cast(rays, pos, self.lidar_range)), 2)
             np.savetxt(f"{self.output_name}keypoints{idx}.csv", pts, fmt='%1.2f', delimiter=",")
+            kpts_model = octomap.OcTree(self.res)
+            for p in self.get_kpts_bbox(pts):
+                kpts_model.updateNode(p, True, lazy_eval=True)
+
+            kpts_model.updateInnerOccupancy()
+            kpts_model.writeBinary(f'{self.output_name}bbox_kpts{idx}.bt'.encode())
+
+            kpts_model = octomap.OcTree(self.res)
+            for p in self.get_kpts_sphere(pts):
+                kpts_model.updateNode(p, True, lazy_eval=True)
+
+            kpts_model.updateInnerOccupancy()
+            kpts_model.writeBinary(f'{self.output_name}sphere_kpts{idx}.bt'.encode())
+
+            kpts_model = octomap.OcTree(self.res)
+            for p in self.get_kpts_cyl(pts):
+                kpts_model.updateNode(p, True, lazy_eval=True)
+
+            kpts_model.updateInnerOccupancy()
+            kpts_model.writeBinary(f'{self.output_name}cyl_kpts{idx}.bt'.encode())
+
+        return scores
 
     def lidar_sensor_data(self):
         points = [set() for _ in range(len(self.lidar_poses))]
@@ -195,6 +220,97 @@ class Pers:
         b = set((tuple(np.round(i, 2)) for i in human_occupied))
         return np.array(list(a.intersection(b)))
 
+    def get_pers(self, covered_model):
+        aabb_min = self.gt_model.getMetricMin()
+        aabb_max = self.gt_model.getMetricMax()
+        center = (aabb_min + aabb_max) / 2
+        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
+        origin = center - dimension / 2 * self.res
+        grid = np.full(dimension, 0, np.int32)
+        covered_grid = np.full(dimension, 0, np.int32)
+        transform = trimesh.transformations.scale_and_translate(scale=self.res, translate=origin)
+        voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
+
+        robot_points = voxels.points[voxels.points[:, 2] >= 1, :]  # not working without this limitation
+        robot_labels = self.robot_model.getLabels(robot_points).flatten()  # 1 occupied, -1 free
+        covered_labels = covered_model.getLabels(robot_points).flatten()  # 1 occupied, 0 free, -1 unknown
+
+        occ_idx = voxels.points_to_indices(robot_points[robot_labels == 1])
+        grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
+        occ_idx = voxels.points_to_indices(robot_points[covered_labels == -1])
+        covered_grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = -1
+        orig_grid = np.copy(grid)
+
+        changed = True
+        while changed:
+            dilated = ndi.binary_dilation(grid, ndi.generate_binary_structure(rank=3, connectivity=1), iterations=1)
+            idxs = np.argwhere((covered_grid == -1) & (dilated == 1) & (grid == 0))
+            grid[idxs[:, 0], idxs[:, 1], idxs[:, 2]] = 1
+            changed = idxs.shape[0] > 0
+
+        pers_model = octomap.OcTree(self.res)
+        for p in voxels.indices_to_points(np.argwhere(orig_grid == 1)):
+            pers_model.updateNode(p, True, lazy_eval=True)
+
+        for p in voxels.indices_to_points(np.argwhere((grid == 1) & (orig_grid != 1))):
+            pers_model.updateNode(p, False, lazy_eval=True)
+
+        pers_model.updateInnerOccupancy()
+        pers_model.writeBinary(f'{self.output_name}pers_model.bt'.encode())
+
+    def get_kpts_bbox(self, kpts):
+        mins = np.min(kpts, 0)
+        maxs = np.max(kpts, 0)
+        x_ = np.arange(mins[0], maxs[0] + self.res / 2, self.res / 2)
+        y_ = np.arange(mins[1], maxs[1] + self.res / 2, self.res / 2)
+        z_ = np.arange(mins[2], maxs[2], self.res / 2)
+        x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
+        points = np.array((x.ravel(), y.ravel(), z.ravel())).T
+        return points
+
+    def get_kpts_sphere(self, kpts, radi=3):
+        points = []
+        theta, phi = np.meshgrid(np.linspace(0, 2 * np.pi, 100), np.linspace(0, np.pi, 50))
+        x_ = np.sin(phi) * np.cos(theta) * radi * self.res / 2
+        y_ = np.sin(phi) * np.sin(theta) * radi * self.res / 2
+        z_ = np.cos(phi) * radi * self.res / 2
+        for kpt in kpts:
+            x = x_ + kpt[0]
+            y = y_ + kpt[1]
+            z = z_ + kpt[2]
+            points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
+        return np.concatenate(points)
+
+    def get_kpts_cyl(self, kpts, radi=1):
+        points = []
+        for line in self.skeleton_lines:
+            r = radi * self.res / 2
+            v = kpts[line[1]] - kpts[line[0]]
+            mag = np.linalg.norm(v)
+            if mag == 0:
+                continue
+            v = v / mag
+            # make some vector not in the same direction as v
+            not_v = np.array([1, 0, 0])
+            if (v == not_v).all():
+                not_v = np.array([0, 1, 0])
+            # make vector perpendicular to v
+            n1 = np.cross(v, not_v)
+            if np.linalg.norm(n1) == 0:
+                continue
+            n1 /= np.linalg.norm(n1)
+            # make unit vector perpendicular to v and n1
+            n2 = np.cross(v, n1)
+            # surface ranges over t from 0 to length of axis and 0 to 2*pi
+            t, theta = np.meshgrid(np.linspace(0, mag, 100), np.linspace(0, 2 * np.pi, 100))
+            # generate coordinates for surface
+            x, y, z = [kpts[line[0]][i] + v[i] * t + r * np.sin(theta) * n1[i] + r * np.cos(theta) * n2[i] for i in
+                       [0, 1, 2]]
+
+            points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
+
+        return np.concatenate(points)
+
     def get_robot_workspace_points(self):
         robot_base = np.array([0, 0, 1])
         aabb_min = self.gt_model.getMetricMin()
@@ -235,7 +351,8 @@ class Pers:
         false_free = np.sum((gt_labels == -1) & (covered_labels == 1))
         unknown_free = np.sum((gt_labels == -1) & (covered_labels == -1))
 
-        coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
+        coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / \
+                         (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
         tpr_occupied = true_occupied / np.sum(gt_labels == 1)
         tpr_free = true_free / np.sum(gt_labels == -1)
         fpr_occupied = false_free / np.sum(gt_labels == -1)
@@ -299,6 +416,7 @@ class Pers:
         save_model(covered_model, self.res, self.output_name + "final")
 
         self.export_params_json()
+        self.get_pers(covered_model)
 
         if detect_keypoints:
             self.detect_keypoints()

@@ -37,9 +37,11 @@ if __name__ == "__main__":
     output_name = datetime.now().strftime("%y%m%d%H%M")
 
     for folder in experiments:
+        resolution = 0.05  # resolution for 5 cm -> 2 cm
+
         cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
         ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
-        ground = [(0.5, 0., 0.02), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
+        ground = [(0.5, 0., resolution*1.2), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
         wall1 = [(2.99, 0, 1.5), Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)]
         wall2 = [(-2.98, 0, 1.5), Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)]
         wall3 = [(0, -1.98, 1.5), Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)]
@@ -55,8 +57,6 @@ if __name__ == "__main__":
         cam_matrices = []
         for i in range(np.sum(boolean_mask_rgbd)):
             cam_matrices.append(cam_matrix)
-
-        resolution = 0.05  # resolution for 5 cm -> 2 cm
 
         # PADS poses - ((x_min, x_max), (y_min, y_max))
         pad_poses = [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
