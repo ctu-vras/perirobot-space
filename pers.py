@@ -61,6 +61,18 @@ def create_sphere(res=2, res2=2):
     return points
 
 
+def get_voxels(mins, maxs, res):
+    aabb_min = mins
+    aabb_max = maxs
+    center = (aabb_min + aabb_max) / 2
+    dimension = np.array((aabb_max - aabb_min) / res).astype(int)
+    origin = center - dimension / 2 * res
+    grid = np.full(dimension, 0, np.int32)
+    transform = trimesh.transformations.scale_and_translate(scale=res, translate=origin)
+    voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
+    return voxels, grid
+
+
 class Pers:
     def __init__(self, folder, resolution=0.01, output_name="blah", lidar_poses=None, rgbd_poses=None,
                  pad_poses=None, gate_poses=None, proximity_poses=None, cam_matrices=None, cam_rotations=None,
@@ -107,7 +119,7 @@ class Pers:
         with open(self.output_name + 'params.json', 'w') as outfile:
             json.dump(json_dict, outfile)
 
-    def area_sensor_data(self):
+    def area_sensor_data(self):  # TODO: return free area
         points = []
         for xlimits, ylimits, zlimits in self.area_poses:
             contactpoints = np.sum(
@@ -141,33 +153,50 @@ class Pers:
                 points.append(end)
         return points
 
+    def get_kpts_models(self, kpts):
+        kpts_bbox = octomap.OcTree(self.res)
+        for p in self.get_kpts_bbox(kpts):
+            kpts_bbox.updateNode(p, True, lazy_eval=True)
+        kpts_bbox.updateInnerOccupancy()
+        kpts_sphere = octomap.OcTree(self.res)
+        for p in self.get_kpts_sphere(kpts):
+            kpts_sphere.updateNode(p, True, lazy_eval=True)
+        kpts_sphere.updateInnerOccupancy()
+        kpts_cyl = octomap.OcTree(self.res)
+        for p in self.get_kpts_cyl(kpts):
+            kpts_cyl.updateNode(p, True, lazy_eval=True)
+        kpts_cyl.updateInnerOccupancy()
+
+        return kpts_bbox, kpts_sphere, kpts_cyl
+
     def detect_keypoints(self):
-        scores = np.zeros((len(self.rgbd_poses), 4))
+        gt_kpts_bbox, gt_kpts_sphere, gt_kpts_cyl = self.get_kpts_models(self.keypoints)
+        voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
+        gt_bbox_labels = gt_kpts_bbox.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+        human_labels = self.human_model.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+        gt_sphere_labels = gt_kpts_sphere.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+        model_coverage = np.sum((human_labels == 1) & (gt_sphere_labels == 1)) / np.sum(
+            (human_labels == 1) | (gt_sphere_labels == 1))
+        scores = np.zeros((len(self.rgbd_poses), 5))
         for idx, pos in enumerate(self.rgbd_poses):
             rays = self.keypoints - pos
             rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
-            pts = np.round(np.array(self.ray_cast(rays, pos, self.lidar_range)), 2)
-            np.savetxt(f"{self.output_name}keypoints{idx}.csv", pts, fmt='%1.2f', delimiter=",")
-            kpts_model = octomap.OcTree(self.res)
-            for p in self.get_kpts_bbox(pts):
-                kpts_model.updateNode(p, True, lazy_eval=True)
+            kpts = np.round(np.array(self.ray_cast(rays, pos, self.lidar_range)), 2)
+            np.savetxt(f"{self.output_name}keypoints{idx}.csv", kpts, fmt='%1.2f', delimiter=",")
+            dists = np.linalg.norm(kpts - self.keypoints, axis=1)
+            scores[idx, :2] = [np.mean(dists), np.max(dists)]
 
-            kpts_model.updateInnerOccupancy()
-            kpts_model.writeBinary(f'{self.output_name}bbox_kpts{idx}.bt'.encode())
+            kpts_bbox, kpts_sphere, kpts_cyl = self.get_kpts_models(kpts)
+            kpts_bbox.writeBinary(f'{self.output_name}bbox_kpts{idx}.bt'.encode())
+            kpts_sphere.writeBinary(f'{self.output_name}sphere_kpts{idx}.bt'.encode())
+            kpts_cyl.writeBinary(f'{self.output_name}cyl_kpts{idx}.bt'.encode())
+            bbox_labels = kpts_bbox.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+            sphere_labels = kpts_sphere.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+            cyl_labels = kpts_cyl.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
 
-            kpts_model = octomap.OcTree(self.res)
-            for p in self.get_kpts_sphere(pts):
-                kpts_model.updateNode(p, True, lazy_eval=True)
-
-            kpts_model.updateInnerOccupancy()
-            kpts_model.writeBinary(f'{self.output_name}sphere_kpts{idx}.bt'.encode())
-
-            kpts_model = octomap.OcTree(self.res)
-            for p in self.get_kpts_cyl(pts):
-                kpts_model.updateNode(p, True, lazy_eval=True)
-
-            kpts_model.updateInnerOccupancy()
-            kpts_model.writeBinary(f'{self.output_name}cyl_kpts{idx}.bt'.encode())
+            scores[idx, 2] = np.sum((gt_bbox_labels == 1) & (bbox_labels == 1)) / np.sum((gt_bbox_labels == 1) | (bbox_labels == 1))  # IoU bbox
+            scores[idx, 3] = np.sum((human_labels == 1) & (sphere_labels == 1)) / np.sum((human_labels == 1) | (sphere_labels == 1))  # model coverage by keypoint spheres - IoU
+            scores[idx, 4] = np.sum((human_labels == 1) & (cyl_labels == 1)) / np.sum((human_labels == 1) | (cyl_labels == 1))  # model coverage by cylinders - IoU
 
         return scores
 
@@ -214,7 +243,7 @@ class Pers:
         image[coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]] = 1
         dilated = ndi.binary_dilation(image, ndi.generate_binary_structure(rank=3, connectivity=1),
                                       iterations=int(self.robot_inflation_value / res))
-        coords = np.argwhere(np.logical_xor(image, dilated) == 1) * res + mins
+        coords = np.argwhere(np.logical_xor(image, dilated) == 1) * res + mins  # remove as we don't want collisions?
         cover_coords = np.argwhere((image == 0) & (dilated == 1)) * res + mins
         a = set((tuple(np.round(i, 2)) for i in coords))
         b = set((tuple(np.round(i, 2)) for i in human_occupied))
@@ -222,22 +251,14 @@ class Pers:
         return np.array(list(a.intersection(b))), np.array(list(c - b))
 
     def get_pers(self, covered_model):
-        aabb_min = self.gt_model.getMetricMin()
-        aabb_max = self.gt_model.getMetricMax()
-        center = (aabb_min + aabb_max) / 2
-        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
-        origin = center - dimension / 2 * self.res
-        grid = np.full(dimension, 0, np.int32)
-        covered_grid = np.full(dimension, 0, np.int32)
-        transform = trimesh.transformations.scale_and_translate(scale=self.res, translate=origin)
-        voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
+        voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
         robot_base = np.array([0, 0, 1])
         robot_points = voxels.points[
                        (voxels.points[:, 2] >= 1) & (np.linalg.norm(voxels.points - robot_base, axis=1) < 1.5),
                        :]  # not working without this limitation
         robot_labels = self.robot_model.getLabels(robot_points).flatten()  # 1 occupied, -1 free
         covered_labels = covered_model.getLabels(robot_points).flatten()  # 1 occupied, 0 free, -1 unknown
-
+        covered_grid = np.copy(grid)
         occ_idx = voxels.points_to_indices(robot_points[robot_labels == 1])
         grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
         occ_idx = voxels.points_to_indices(robot_points[covered_labels == -1])
@@ -255,11 +276,13 @@ class Pers:
         for p in voxels.indices_to_points(np.argwhere(orig_grid == 1)):
             pers_model.updateNode(p, True, lazy_eval=True)
 
-        for p in voxels.indices_to_points(np.argwhere((grid == 1) & (orig_grid != 1))):
+        added_points = voxels.indices_to_points(np.argwhere((grid == 1) & (orig_grid != 1)))
+        for p in added_points:
             pers_model.updateNode(p, False, lazy_eval=True)
 
         pers_model.updateInnerOccupancy()
         pers_model.writeBinary(f'{self.output_name}pers_model.bt'.encode())
+        return added_points.shape[0]
 
     def get_kpts_bbox(self, kpts):
         mins = np.min(kpts, 0)
@@ -316,32 +339,15 @@ class Pers:
 
     def get_robot_workspace_points(self):
         robot_base = np.array([0, 0, 1])
-        aabb_min = self.gt_model.getMetricMin()
-        aabb_max = self.gt_model.getMetricMax()
-        center = (aabb_min + aabb_max) / 2
-        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
-        origin = center - dimension / 2 * self.res
-        grid = np.full(dimension, -1, np.int32)
-        transform = trimesh.transformations.scale_and_translate(
-            scale=self.res, translate=origin
-        )
-        points = trimesh.voxel.VoxelGrid(encoding=grid, transform=transform).points
+        voxels, _ = get_voxels(self.gt_model.getMetricMin(),
+                               self.gt_model.getMetricMax(), self.res)
         # sphere around robot - maybe remove robot?
-        points = points[np.linalg.norm(points - robot_base, axis=1) < 1.5, :]
-        return points
+        return voxels.points[np.linalg.norm(voxels.points - robot_base, axis=1) < 1.5, :]
 
     def get_human_points(self):
-        aabb_min = self.human_model.getMetricMin() - np.array([0.5, 0.5, 0])
-        aabb_max = self.human_model.getMetricMax() + 0.5
-        center = (aabb_min + aabb_max) / 2
-        dimension = np.array((aabb_max - aabb_min) / self.res).astype(int)
-        origin = center - dimension / 2 * self.res
-        grid = np.full(dimension, -1, np.int32)
-        transform = trimesh.transformations.scale_and_translate(
-            scale=self.res, translate=origin
-        )
-        points = trimesh.voxel.VoxelGrid(encoding=grid, transform=transform).points
-        return points
+        voxels, _ = get_voxels(self.human_model.getMetricMin() - np.array([0.5, 0.5, 0]),
+                               self.human_model.getMetricMax() + 0.5, self.res)
+        return voxels.points
 
     def compute_metric(self, points, covered_model, ratio=0.01):
         gt_labels = self.gt_model.getLabels(points).flatten()  # 1 occupied, -1 free
@@ -367,7 +373,7 @@ class Pers:
         # print(f"Unknown occupied = {unknown_occupied}; unknown free = {unknown_free}")
         return coverage_score, unknown_occupied, unknown_free, tpr_occupied, tpr_free, fpr_occupied, fpr_free
 
-    def compute_statistics(self, covered_model, save_stats):
+    def compute_statistics(self, covered_model, pers_model_score, keypoints_scores, save_stats):
         print(self.folder)
         # print("Robot Workspace\n---------------")
         points = self.get_robot_workspace_points()
@@ -411,19 +417,21 @@ class Pers:
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox_area")
 
-        data, empty_data = self.proximity_robot_sensor_data()
-        for point in data:
-            covered_model.updateNode(point, True, lazy_eval=True)  # TODO raycasting
-        for point in empty_data:
-            covered_model.updateNode(point, False, lazy_eval=True)  # TODO raycasting
-
-        covered_model.updateInnerOccupancy()
+        if self.robot_inflation_value > 0:
+            data, free_data = self.proximity_robot_sensor_data()
+            for point in data:
+                covered_model.updateNode(point, True, lazy_eval=True)  # TODO raycasting
+            for point in free_data:
+                covered_model.updateNode(point, False, lazy_eval=True)
+            covered_model.updateInnerOccupancy()
+            
         save_model(covered_model, self.res, self.output_name + "final")
 
         self.export_params_json()
-        self.get_pers(covered_model)
-
+        pers_model_score = self.get_pers(covered_model)
+        keypoints_scores = np.array([])
         if detect_keypoints:
-            self.detect_keypoints()
+            keypoints_scores = self.detect_keypoints()
+        print(pers_model_score, keypoints_scores)
         if compute_statistics:
-            self.compute_statistics(covered_model, save_stats)
+            self.compute_statistics(covered_model, pers_model_score, keypoints_scores, save_stats)
