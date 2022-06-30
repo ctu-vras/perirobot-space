@@ -1,0 +1,74 @@
+{
+  "cam_ceil":
+    {
+      "code": "100000",
+      "name": "cam_ceil",
+      "boolean_mask_lidar": [0, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [1, 0, 0, 0, 0, 0],
+      "pad_poses": [],
+      "gate_poses": [],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.0
+    },
+  "cam_east":
+    {
+      "code": "010000",
+      "name": "cam_east",
+      "boolean_mask_lidar": [0, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [0, 0, 1, 0, 0, 0],
+      "pad_poses": [],
+      "gate_poses": [],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.0
+    },
+  "lasergate":
+    {
+      "code": "001000",
+      "name": "lasergate",
+      "boolean_mask_lidar": [0, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [0, 0, 0, 0, 0, 0],
+      "pad_poses": [],
+      "gate_poses": [[[-2.8, 2.8], [-0.7, -0.7], [1, 1]]],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.0
+    },
+  "lidar_ceil":
+    {
+      "code": "000100",
+      "name": "lidar_ceil",
+      "boolean_mask_lidar": [1, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [0, 0, 0, 0, 0, 0],
+      "pad_poses": [],
+      "gate_poses": [],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.0
+    },
+  "pad":
+    {
+      "code": "000010",
+      "name": "pad",
+      "boolean_mask_lidar": [0, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [0, 0, 0, 0, 0, 0],
+      "pad_poses": [[[-0.2, 1], [-1, -0.6]], [[-0.2, 1], [1, 1.5]]],
+      "gate_poses": [],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.0
+    },
+  "proximity":
+    {
+      "code": "000001",
+      "name": "proximity",
+      "boolean_mask_lidar": [0, 0, 0, 0, 0, 0],
+      "boolean_mask_rgbd": [0, 0, 0, 0, 0, 0],
+      "pad_poses": [],
+      "gate_poses": [],
+      "proximity_poses": [],
+      "proximity_rays": [],
+      "robot_inflation_value": 0.3
+    }
+}
