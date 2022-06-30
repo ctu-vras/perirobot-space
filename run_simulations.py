@@ -26,7 +26,7 @@ def plot_skeleton(filename):
     fig.show()
 
 
-def generate_experiments(exp_cfg, cases, time_stamping=True):
+def generate_experiments(exp_cfg, cases, res, time_stamping=True):
 
     time_stamp = ''
     if time_stamping:
@@ -34,7 +34,7 @@ def generate_experiments(exp_cfg, cases, time_stamping=True):
 
     cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
     ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
-    ground = [(0.5, 0., 0.02), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
+    ground = [(0.5, 0., res+0.01), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
     wall1 = [(2.99, 0, 1.5), Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)]
     wall2 = [(-2.98, 0, 1.5), Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)]
     wall3 = [(0, -1.98, 1.5), Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)]
@@ -85,13 +85,12 @@ if __name__ == "__main__":
     with open('experiments.json', "r") as cfg:
         experiment_config = json.load(cfg)
 
-    experiments = generate_experiments(experiment_config, cases, time_stamping=False)
+    resolution = 0.05  # resolution for 5 cm -> 2 cm
+    experiments = generate_experiments(experiment_config, cases, resolution, time_stamping=False)
 
     # General parameters
     proximity_range = 10  # max distance detected by ray proximity sensor
     lidar_range = 10  # max distance detected by lidar (fish-eye) sensor
-    resolution = 0.05  # resolution for 5 cm -> 2 cm
-
     for exp_key in experiments:
         exp = experiments[exp_key]
         simulation = pers.Pers(exp['case'], resolution=resolution, output_name=exp['name'],

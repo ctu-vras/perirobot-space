@@ -215,10 +215,11 @@ class Pers:
         dilated = ndi.binary_dilation(image, ndi.generate_binary_structure(rank=3, connectivity=1),
                                       iterations=int(self.robot_inflation_value / res))
         coords = np.argwhere(np.logical_xor(image, dilated) == 1) * res + mins
-
+        cover_coords = np.argwhere((image == 0) & (dilated == 1)) * res + mins
         a = set((tuple(np.round(i, 2)) for i in coords))
         b = set((tuple(np.round(i, 2)) for i in human_occupied))
-        return np.array(list(a.intersection(b)))
+        c = set((tuple(np.round(i, 2)) for i in cover_coords))
+        return np.array(list(a.intersection(b))), np.array(list(c - b))
 
     def get_pers(self, covered_model):
         aabb_min = self.gt_model.getMetricMin()
@@ -230,8 +231,10 @@ class Pers:
         covered_grid = np.full(dimension, 0, np.int32)
         transform = trimesh.transformations.scale_and_translate(scale=self.res, translate=origin)
         voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
-
-        robot_points = voxels.points[voxels.points[:, 2] >= 1, :]  # not working without this limitation
+        robot_base = np.array([0, 0, 1])
+        robot_points = voxels.points[
+                       (voxels.points[:, 2] >= 1) & (np.linalg.norm(voxels.points - robot_base, axis=1) < 1.5),
+                       :]  # not working without this limitation
         robot_labels = self.robot_model.getLabels(robot_points).flatten()  # 1 occupied, -1 free
         covered_labels = covered_model.getLabels(robot_points).flatten()  # 1 occupied, 0 free, -1 unknown
 
@@ -408,9 +411,11 @@ class Pers:
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox_area")
 
-        data = self.proximity_robot_sensor_data()
+        data, empty_data = self.proximity_robot_sensor_data()
         for point in data:
             covered_model.updateNode(point, True, lazy_eval=True)  # TODO raycasting
+        for point in empty_data:
+            covered_model.updateNode(point, False, lazy_eval=True)  # TODO raycasting
 
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "final")
