@@ -119,21 +119,24 @@ class Pers:
         with open(self.output_name + 'params.json', 'w') as outfile:
             json.dump(json_dict, outfile)
 
-    def area_sensor_data(self):  # TODO: return free area
+    def area_sensor_data(self):
         points = []
+        free_points = []
         for xlimits, ylimits, zlimits in self.area_poses:
             contactpoints = np.sum(
                 (self.occupied[:, 0] >= xlimits[0]) & (self.occupied[:, 0] <= xlimits[1] + self.res) &
                 (self.occupied[:, 1] >= ylimits[0]) & (self.occupied[:, 1] <= ylimits[1] + self.res) &
                 (self.occupied[:, 2] >= zlimits[0]) & (self.occupied[:, 2] <= zlimits[1] + self.res))
 
+            x_ = np.arange(xlimits[0], xlimits[1] + self.res / 2, self.res / 2)
+            y_ = np.arange(ylimits[0], ylimits[1] + self.res / 2, self.res / 2)
+            z_ = np.arange(0, 3, self.res / 2)
+            x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
             if contactpoints > 0:  # TODO: nafouknout kvadr - nejenom pruh ale vetsi kus odpovidajici cloveku
-                x_ = np.arange(xlimits[0], xlimits[1] + self.res / 2, self.res / 2)
-                y_ = np.arange(ylimits[0], ylimits[1] + self.res / 2, self.res / 2)
-                z_ = np.arange(0, 3, self.res / 2)
-                x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
                 points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
-        return points
+            else:
+                free_points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
+        return points, free_points
 
     def proximity_sensor_data(self):
         points = []
@@ -410,10 +413,13 @@ class Pers:
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox")
 
-        data = self.area_sensor_data()
+        data, free_data = self.area_sensor_data()
         for points in data:
             for p in points:
                 covered_model.updateNode(p, True, lazy_eval=True)
+        for points in free_data:
+            for p in points:
+                covered_model.updateNode(p, False, lazy_eval=True)
         covered_model.updateInnerOccupancy()
         save_model(covered_model, self.res, self.output_name + "lidar_rgbd_prox_area")
 
