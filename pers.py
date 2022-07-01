@@ -197,9 +197,12 @@ class Pers:
             sphere_labels = kpts_sphere.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
             cyl_labels = kpts_cyl.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
 
-            scores[idx, 2] = np.sum((gt_bbox_labels == 1) & (bbox_labels == 1)) / np.sum((gt_bbox_labels == 1) | (bbox_labels == 1))  # IoU bbox
-            scores[idx, 3] = np.sum((human_labels == 1) & (sphere_labels == 1)) / np.sum((human_labels == 1) | (sphere_labels == 1))  # model coverage by keypoint spheres - IoU
-            scores[idx, 4] = np.sum((human_labels == 1) & (cyl_labels == 1)) / np.sum((human_labels == 1) | (cyl_labels == 1))  # model coverage by cylinders - IoU
+            scores[idx, 2] = np.sum((gt_bbox_labels == 1) & (bbox_labels == 1)) / np.sum(
+                (gt_bbox_labels == 1) | (bbox_labels == 1))  # IoU bbox
+            scores[idx, 3] = np.sum((human_labels == 1) & (sphere_labels == 1)) / np.sum(
+                (human_labels == 1) | (sphere_labels == 1))  # model coverage by keypoint spheres - IoU
+            scores[idx, 4] = np.sum((human_labels == 1) & (cyl_labels == 1)) / np.sum(
+                (human_labels == 1) | (cyl_labels == 1))  # model coverage by cylinders - IoU
 
         return scores
 
@@ -430,8 +433,21 @@ class Pers:
             for point in free_data:
                 covered_model.updateNode(point, False, lazy_eval=True)
             covered_model.updateInnerOccupancy()
-            
+
         save_model(covered_model, self.res, self.output_name + "final")
+
+        voxels, grid = get_voxels(covered_model.getMetricMin(), covered_model.getMetricMax(), self.res)
+
+        covered_model_visu = octomap.OcTree(self.res)
+        covered_labels = covered_model.getLabels(voxels.points).flatten()  # 1 occupied, 0 free, -1 unknown
+        for point in voxels.points[covered_labels == 1, :]:
+            covered_model_visu.updateNode(point, True, lazy_eval=True)
+        for point in voxels.points[covered_labels == -1, :]:
+            covered_model_visu.updateNode(point, True, lazy_eval=True)
+        for point in voxels.points[covered_labels == 0, :]:
+            covered_model_visu.updateNode(point, False, lazy_eval=True)
+        covered_model_visu.updateInnerOccupancy()
+        save_model(covered_model_visu, self.res, self.output_name + "unknown_occupied")
 
         self.export_params_json()
         pers_model_score = self.get_pers(covered_model)

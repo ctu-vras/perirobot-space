@@ -181,6 +181,15 @@ def addHuman(filename, kpts, T):
     return np.asarray(pcd.points), np.round(keypoints[:3, :].T, 2)
 
 
+def composeModel(res, points_array, name):
+    tree = octomap.OcTree(res)
+    for points in points_array:
+        for p in points:
+            tree.updateNode(p, True, lazy_eval=True)
+    tree.updateInnerOccupancy()
+    tree.writeBinary(f'models/{name}/model.bt'.encode())
+
+
 if __name__ == "__main__":
 
     joints = [0, 0, -np.pi / 2, np.pi / 2, -np.pi / 2, -np.pi / 2, 0]
@@ -196,47 +205,39 @@ if __name__ == "__main__":
           [0.5, -0.8, 0.3, 0, 0, np.pi]]  # human poses
 
     resolution = 0.05  # resolution for 5 cm -> 2 cm
-    for i in range(7):
-        model = octomap.OcTree(resolution)
-        robot_model = octomap.OcTree(resolution)
-        for p in robot:
-            robot_model.updateNode(p, True, lazy_eval=True)
-            model.updateNode(p, True, lazy_eval=True)
-        for p in cell:
-            model.updateNode(p, True, lazy_eval=True)
-        for p in table:
-            model.updateNode(p, True, lazy_eval=True)
-        points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]))
-        human_model = octomap.OcTree(resolution)
-        for p in points:
-            human_model.updateNode(p, True, lazy_eval=True)
-            model.updateNode(p, True, lazy_eval=True)
-
-        os.makedirs(f'models/human{i}-exp2', exist_ok=True)
-        np.savetxt(f"models/human{i}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
-        np.savez(f"models/human{i}-exp2/vars.npz", joints, T, Ts[i])
-        model.updateInnerOccupancy()
-        human_model.updateInnerOccupancy()
-        robot_model.updateInnerOccupancy()
-
-        model.writeBinary(f'models/human{i}-exp2/model.bt'.encode())
-        human_model.writeBinary(f'models/human{i}-exp2/human.bt'.encode())
-        robot_model.writeBinary(f'models/human{i}-exp2/robot.bt'.encode())
-
-    model = octomap.OcTree(resolution)
     robot_model = octomap.OcTree(resolution)
     for p in robot:
         robot_model.updateNode(p, True, lazy_eval=True)
-        model.updateNode(p, True, lazy_eval=True)
-    for p in cell:
-        model.updateNode(p, True, lazy_eval=True)
-    for p in table:
-        model.updateNode(p, True, lazy_eval=True)
-
-    os.makedirs(f'models/nohuman-exp2', exist_ok=True)
-    # np.savez(f"models/nohuman-exp2/vars.npz", joints, T, Ts[i])
-    model.updateInnerOccupancy()
     robot_model.updateInnerOccupancy()
 
-    model.writeBinary(f'models/nohuman-exp2/model.bt'.encode())
+    for i in range(7):
+        os.makedirs(f'models/human{i}-exp2', exist_ok=True)
+        human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]))
+        human_model = octomap.OcTree(resolution)
+        for p in human_points:
+            human_model.updateNode(p, True, lazy_eval=True)
+        human_model.updateInnerOccupancy()
+        human_model.writeBinary(f'models/human{i}-exp2/human.bt'.encode())
+        composeModel(resolution, [robot, cell, table, human_points], f"human{i}-exp2")
+        np.savetxt(f"models/human{i}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+        np.savez(f"models/human{i}-exp2/vars.npz", joints, T, Ts[i])
+        robot_model.writeBinary(f'models/human{i}-exp2/robot.bt'.encode())
+
+    i = 6
+    human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]))
+    j = 3
+    human_points2, kpts2 = addHuman(filenames[j], keypoints[j], xyz_rpy_to_matrix([0.3, 0.8, 0, 0, 0, np.pi]))
+    os.makedirs(f'models/human{i}{j}-exp2', exist_ok=True)
+    human_model = octomap.OcTree(resolution)
+    for p in human_points:
+        human_model.updateNode(p, True, lazy_eval=True)
+    human_model.updateInnerOccupancy()
+    human_model.writeBinary(f'models/human{i}{j}-exp2/human.bt'.encode())
+    composeModel(resolution, [robot, cell, table, human_points, human_points2], f"human{i}{j}-exp2")
+    np.savetxt(f"models/human{i}{j}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+    np.savez(f"models/human{i}{j}-exp2/vars.npz", joints, T, Ts[i])
+    robot_model.writeBinary(f'models/human{i}{j}-exp2/robot.bt'.encode())
+
+    os.makedirs(f'models/nohuman-exp2', exist_ok=True)
+    composeModel(resolution, [robot, cell, table], "nohuman-exp2")
     robot_model.writeBinary(f'models/nohuman-exp2/robot.bt'.encode())
