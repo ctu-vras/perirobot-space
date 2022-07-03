@@ -396,6 +396,11 @@ class Pers:
                        [tuple([self.folder]) + score_workspace + score_human],
                        delimiter=", ",
                        fmt="%s")
+            if keypoints_scores is not np.array([]):
+                np.savetxt(self.output_name + "keypoint_stats.csv",
+                           keypoints_scores,
+                           delimiter=", ",
+                           fmt="%s")
 
         # TODO: compare original human bounding box and bounding box of the keypoints
 

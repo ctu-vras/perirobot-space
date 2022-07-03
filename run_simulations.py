@@ -76,7 +76,7 @@ def generate_experiments(exp_cfg, cases, res, time_stamping=True):
 
 if __name__ == "__main__":
     cases = ["human1-exp2",
-             "human3-exp2",
+             "human63-exp2",
              "human4-exp2",
              "human6-exp2",
              # "nohuman-exp2",
