@@ -178,8 +178,12 @@ class Pers:
         gt_bbox_labels = gt_kpts_bbox.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
         human_labels = self.human_model.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
         gt_sphere_labels = gt_kpts_sphere.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
-        model_coverage = np.sum((human_labels == 1) & (gt_sphere_labels == 1)) / np.sum(
+        model_coverage_sphere = np.sum((human_labels == 1) & (gt_sphere_labels == 1)) / np.sum(
             (human_labels == 1) | (gt_sphere_labels == 1))
+        gt_cyl_labels = gt_kpts_cyl.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+        model_coverage_cyl = np.sum((human_labels == 1) & (gt_cyl_labels == 1)) / np.sum(
+            (human_labels == 1) | (gt_cyl_labels == 1))
+
         scores = np.zeros((len(self.rgbd_poses), 5))
         for idx, pos in enumerate(self.rgbd_poses):
             rays = self.keypoints - pos
