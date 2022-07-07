@@ -82,9 +82,9 @@ class Pers:
         self.rgbd_poses = rgbd_poses
         self.area_poses = gate_poses
         self.proximity_poses = proximity_poses
-        for pos in pad_poses:
-            self.area_poses.append((pos[0], pos[1], (0.05, 0.06)))
         self.res = resolution
+        for pos in pad_poses:
+            self.area_poses.append((pos[0], pos[1], (self.res, 2*self.res)))
         self.folder = folder
         self.gt_model = octomap.OcTree(self.res)
         self.gt_model.readBinary(f"models/{folder}/model.bt".encode())
@@ -242,23 +242,25 @@ class Pers:
         return visib
 
     def proximity_robot_sensor_data(self):
-        res = self.res / 2
-        human_occupied, _ = get_occupied_voxels(self.human_model)
-        mins = self.robot_model.getMetricMin() - self.robot_inflation_value
-        dims = ((self.robot_model.getMetricSize() + 2 * self.robot_inflation_value + res) / res).astype(int)
-        robot_occupied, _ = get_occupied_voxels(self.robot_model)
-        coordinates = np.floor((robot_occupied - mins) / res).astype(int)
-
-        image = np.zeros(dims, dtype=int)
-        image[coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]] = 1
-        dilated = ndi.binary_dilation(image, ndi.generate_binary_structure(rank=3, connectivity=1),
-                                      iterations=int(self.robot_inflation_value / res))
-        coords = np.argwhere(np.logical_xor(image, dilated) == 1) * res + mins  # remove as we don't want collisions?
-        cover_coords = np.argwhere((image == 0) & (dilated == 1)) * res + mins
-        a = set((tuple(np.round(i, 2)) for i in coords))
-        b = set((tuple(np.round(i, 2)) for i in human_occupied))
-        c = set((tuple(np.round(i, 2)) for i in cover_coords))
-        return np.array(list(a.intersection(b))), np.array(list(c - b))
+        voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
+        robot_base = np.array([0, 0, 1])
+        
+        robot_points = voxels.points[
+                       (voxels.points[:, 2] >= 1) & (np.linalg.norm(voxels.points - robot_base, axis=1) < 1.5),
+                       :]
+        robot_labels = self.robot_model.getLabels(robot_points).flatten()  # 1 occupied, -1 free
+        human_labels = self.human_model.getLabels(robot_points).flatten()  # 1 occupied, -1 free
+        
+        human_grid = np.copy(grid)
+        occ_idx = voxels.points_to_indices(robot_points[robot_labels == 1])
+        grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
+        occ_idx = voxels.points_to_indices(robot_points[human_labels == 1])
+        human_grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
+        
+        dilated = ndi.binary_dilation(grid, ndi.generate_binary_structure(rank=3, connectivity=1),
+                                      iterations=int(self.robot_inflation_value / self.res))
+        
+        return voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 1))), voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 0)))
 
     def get_pers(self, covered_model):
         voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
