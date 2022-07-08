@@ -10,7 +10,7 @@ if __name__ == "__main__":
     except IndexError:
         experiment_names = [
                             'cam_ceil',
-                            'cam_east',
+                            'cam_west',
                             'lasergate',
                             'lidar_ceil',
                             'pad',

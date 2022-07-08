@@ -205,7 +205,6 @@ def addHuman(filename, kpts, T, res, folder):
     human_model.writeBinary(f'models/{folder}/human.bt'.encode())
 
     return human_points, np.round(keypoints[:3, :].T, 2)
-    
 
 
 def composeModel(res, points_array, name):
@@ -231,7 +230,7 @@ if __name__ == "__main__":
           [0.3, -0.8, 0, 0, 0, 0], [0.3, -0.8, 0, 0, 0, np.pi / 2], [0.2, -0.8, 0, 0, 0, np.pi],
           [0.5, -0.8, 0.3, 0, 0, np.pi]]  # human poses
 
-    resolution = 0.05  # resolution for 5 cm -> 2 cm
+    resolution = 0.02  # resolution for 5 cm -> 2 cm
     robot_model = octomap.OcTree(resolution)
     for p in robot:
         robot_model.updateNode(p, True, lazy_eval=True)

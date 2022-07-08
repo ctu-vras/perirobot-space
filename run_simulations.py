@@ -41,11 +41,6 @@ def generate_experiments(exp_cfg, cases, res, time_stamping=True):
     wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
     sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
-    # # PADS poses - ((x_min, x_max), (y_min, y_max))
-    # pad_poses = []  # [((-0.2, 1), (-1, -0.6)), ((-0.2, 1), (1, 1.5))]
-    # # GATES poses - ((x_min, x_max), (y_min, y_max), (z_min, z_max))
-    # gate_poses = []  # [((-2.8, 2.8), (-0.7, -0.7), (1, 1))]
-
     experiments = {}
     for exp_key in exp_cfg:
         for case in cases:
@@ -76,16 +71,16 @@ def generate_experiments(exp_cfg, cases, res, time_stamping=True):
 
 if __name__ == "__main__":
     cases = ["human1-exp2",
-             "human63-exp2",
              "human4-exp2",
              "human6-exp2",
+             "human63-exp2",
              # "nohuman-exp2",
              ]
 
     with open('experiments.json', "r") as cfg:
         experiment_config = json.load(cfg)
 
-    resolution = 0.05  # resolution for 5 cm -> 2 cm
+    resolution = 0.02  # resolution for 5 cm -> 2 cm
     experiments = generate_experiments(experiment_config, cases, resolution, time_stamping=False)
 
     # General parameters
