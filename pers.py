@@ -46,11 +46,11 @@ def save_model(tree, res, filename):
     tree.writeBinary(f'{filename}.bt'.encode())
 
 
-def create_sphere(res=2, res2=2):
+def create_sphere(res=0.5, res2=0.5):
     points = []
 
     for theta in np.deg2rad(np.arange(-180, 180, res)):
-        for phi in np.deg2rad(np.arange(0, 180, res2)):
+        for phi in np.deg2rad(np.arange(135, 180, res2)):
             x = np.sin(phi) * np.cos(theta)
             y = np.sin(phi) * np.sin(theta)
             z = np.cos(phi)
@@ -213,9 +213,10 @@ class Pers:
     def lidar_sensor_data(self):
         points = [set() for _ in range(len(self.lidar_poses))]
         for pos, vis in zip(self.lidar_poses, points):
-            rays = self.occupied - pos
-            rays = rays[np.linalg.norm(rays, axis=1) < self.lidar_range, :]
-            rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
+            # rays = self.occupied - pos
+            rays = self.rays
+            # rays = rays[np.linalg.norm(rays, axis=1) < self.lidar_range, :]
+            # rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
             pts = np.array(self.ray_cast(rays, pos, self.lidar_range))
             vis |= set(zip(pts[:, 0], pts[:, 1], pts[:, 2]))  # TODO: rewrite with np.unique
         return points
