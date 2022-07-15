@@ -132,7 +132,7 @@ class Pers:
             y_ = np.arange(ylimits[0], ylimits[1] + self.res / 2, self.res / 2)
             z_ = np.arange(0, 3, self.res / 2)
             x, y, z = np.meshgrid(x_, y_, z_, indexing='ij')
-            if contactpoints > 0:  # TODO: nafouknout kvadr - nejenom pruh ale vetsi kus odpovidajici cloveku
+            if contactpoints > 0:
                 points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
             else:
                 free_points.append(np.array((x.ravel(), y.ravel(), z.ravel())).T)
@@ -213,10 +213,7 @@ class Pers:
     def lidar_sensor_data(self):
         points = [set() for _ in range(len(self.lidar_poses))]
         for pos, vis in zip(self.lidar_poses, points):
-            # rays = self.occupied - pos
             rays = self.rays
-            # rays = rays[np.linalg.norm(rays, axis=1) < self.lidar_range, :]
-            # rays = rays / np.linalg.norm(rays, axis=1, keepdims=True)
             pts = np.array(self.ray_cast(rays, pos, self.lidar_range))
             vis |= set(zip(pts[:, 0], pts[:, 1], pts[:, 2]))  # TODO: rewrite with np.unique
         return points
@@ -362,7 +359,7 @@ class Pers:
                                self.human_model.getMetricMax() + 0.5, self.res)
         return voxels.points
 
-    def compute_metric(self, points, covered_model, ratio=0.01):
+    def compute_metric(self, points, covered_model):
         gt_labels = self.gt_model.getLabels(points).flatten()  # 1 occupied, -1 free
         covered_labels = covered_model.getLabels(points).flatten()  # 1 occupied, 0 free, -1 unknown
         true_occupied = np.sum((gt_labels == 1) & (covered_labels == 1))
@@ -373,25 +370,18 @@ class Pers:
         false_free = np.sum((gt_labels == -1) & (covered_labels == 1))
         unknown_free = np.sum((gt_labels == -1) & (covered_labels == -1))
 
-        coverage_score = (true_occupied - false_occupied + ratio * true_free - false_free) / \
-                         (np.sum(gt_labels == 1) + ratio * np.sum(gt_labels == -1))
         tpr_occupied = true_occupied / np.sum(gt_labels == 1)
         tpr_free = true_free / np.sum(gt_labels == -1)
         fpr_occupied = false_free / np.sum(gt_labels == -1)
         fpr_free = false_occupied / np.sum(gt_labels == 1)
-        # print("(true_occupied - false_occupied + ratio * true_free - false_free) / (gt_occupied + ratio * gt_free)")
-        # print(f"({true_occupied} - {false_occupied} + {ratio} * {true_free} - {false_free}) / "
-        #       f"({np.sum(gt_labels == 1)} + {ratio} * {np.sum(gt_labels == -1)})")
-        # print(f"Score = {coverage_score}")
-        # print(f"Unknown occupied = {unknown_occupied}; unknown free = {unknown_free}")
-        return coverage_score, unknown_occupied, unknown_free, tpr_occupied, tpr_free, fpr_occupied, fpr_free
+        return unknown_occupied, unknown_free, tpr_occupied, tpr_free, fpr_occupied, fpr_free
 
-    def compute_statistics(self, covered_model, pers_model_score, keypoints_scores, save_stats):
+    def compute_statistics(self, covered_model, keypoints_scores, save_stats):
         print(self.folder)
-        # print("Robot Workspace\n---------------")
+
         points = self.get_robot_workspace_points()
         score_workspace = self.compute_metric(points, covered_model)
-        # print("\n---------------\nHuman\n---------------")
+
         points = self.get_human_points()
         score_human = self.compute_metric(points, covered_model)
         if save_stats:
@@ -404,8 +394,6 @@ class Pers:
                            keypoints_scores,
                            delimiter=", ",
                            fmt="%s")
-
-        # TODO: compare original human bounding box and bounding box of the keypoints
 
     def process_sensors(self, compute_statistics=False, detect_keypoints=False, save_stats=False):
         covered_model = octomap.OcTree(self.res)
@@ -462,10 +450,8 @@ class Pers:
         save_model(covered_model_visu, self.res, self.output_name + "unknown_occupied")
 
         self.export_params_json()
-        pers_model_score = self.get_pers(covered_model)
         keypoints_scores = np.array([])
         if detect_keypoints:
             keypoints_scores = self.detect_keypoints()
-        print(pers_model_score, keypoints_scores)
         if compute_statistics:
-            self.compute_statistics(covered_model, pers_model_score, keypoints_scores, save_stats)
+            self.compute_statistics(covered_model, keypoints_scores, save_stats)

@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import sys
 
-KEYPOINTS = True
+KEYPOINTS = False
 
 if __name__ == "__main__":
     if KEYPOINTS:
@@ -29,16 +29,16 @@ if __name__ == "__main__":
             experiment_names = [sys.argv[1]]
         except IndexError:
             experiment_names = [
-                # 'cam_ceil',
-                # 'cam_west',
-                # 'lasergate',
-                # 'lidar_ceil',
-                # 'pad',
-                # 'proximity',
-                'double_cam',
-                'cam_pad',
-                'cam_prox',
-                'lidar_prox',
+                'cam_ceil',
+                'cam_west',
+                'lasergate',
+                'lidar_ceil',
+                'pad',
+                'proximity',
+                # 'double_cam',
+                # 'cam_pad',
+                # 'cam_prox',
+                # 'lidar_prox',
             ]
         prefix = ''
         dtypes = {"use_case": 'str', "robot_score": np.dtype('f4'),

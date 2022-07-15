@@ -71,16 +71,15 @@ def generate_experiments(exp_cfg, cases, res, time_stamping=True):
 
 if __name__ == "__main__":
     cases = ["human1-exp2",
-             "human4-exp2",
-             "human6-exp2",
-             "human63-exp2",
-             # "nohuman-exp2",
+             # "human4-exp2",
+             # "human6-exp2",
+             # "human63-exp2",
              ]
 
     with open('experiments.json', "r") as cfg:
         experiment_config = json.load(cfg)
 
-    resolution = 0.02  # resolution for 5 cm -> 2 cm
+    resolution = 0.02  # m
     experiments = generate_experiments(experiment_config, cases, resolution, time_stamping=False)
 
     # General parameters
@@ -98,5 +97,3 @@ if __name__ == "__main__":
                                proximity_range=proximity_range, lidar_range=lidar_range)
 
         simulation.process_sensors(compute_statistics=True, detect_keypoints=True, save_stats=True)
-
-        # plot_skeleton(f"results/{exp.name}/keypoints0")
