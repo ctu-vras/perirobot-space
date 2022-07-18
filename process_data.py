@@ -3,10 +3,10 @@ import pandas as pd
 import os
 import sys
 
-KEYPOINTS = False
+PROCESS_KEYPOINTS = False
 
 if __name__ == "__main__":
-    if KEYPOINTS:
+    if PROCESS_KEYPOINTS:
         experiment_names = [
             'cam_ceil',
             'cam_west',

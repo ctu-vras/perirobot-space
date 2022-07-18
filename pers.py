@@ -172,7 +172,7 @@ class Pers:
 
         return kpts_bbox, kpts_sphere, kpts_cyl
 
-    def detect_keypoints(self):
+    def detect_kpts(self):
         gt_kpts_bbox, gt_kpts_sphere, gt_kpts_cyl = self.get_kpts_models(self.keypoints)
         voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
         gt_bbox_labels = gt_kpts_bbox.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
@@ -258,7 +258,8 @@ class Pers:
         dilated = ndi.binary_dilation(grid, ndi.generate_binary_structure(rank=3, connectivity=1),
                                       iterations=int(self.robot_inflation_value / self.res))
         
-        return voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 1))), voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 0)))
+        return (voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 1))),
+                voxels.indices_to_points(np.argwhere((dilated == 1) & (grid == 0) & (human_grid == 0))))
 
     def get_pers(self, covered_model):
         voxels, grid = get_voxels(self.gt_model.getMetricMin(), self.gt_model.getMetricMax(), self.res)
@@ -438,20 +439,20 @@ class Pers:
 
         voxels, grid = get_voxels(covered_model.getMetricMin(), covered_model.getMetricMax(), self.res)
 
-        covered_model_visu = octomap.OcTree(self.res)
+        covered_model_visual = octomap.OcTree(self.res)
         covered_labels = covered_model.getLabels(voxels.points).flatten()  # 1 occupied, 0 free, -1 unknown
         for point in voxels.points[covered_labels == 1, :]:
-            covered_model_visu.updateNode(point, True, lazy_eval=True)
+            covered_model_visual.updateNode(point, True, lazy_eval=True)
         for point in voxels.points[covered_labels == -1, :]:
-            covered_model_visu.updateNode(point, True, lazy_eval=True)
+            covered_model_visual.updateNode(point, True, lazy_eval=True)
         for point in voxels.points[covered_labels == 0, :]:
-            covered_model_visu.updateNode(point, False, lazy_eval=True)
-        covered_model_visu.updateInnerOccupancy()
-        save_model(covered_model_visu, self.res, self.output_name + "unknown_occupied")
+            covered_model_visual.updateNode(point, False, lazy_eval=True)
+        covered_model_visual.updateInnerOccupancy()
+        save_model(covered_model_visual, self.res, self.output_name + "unknown_occupied")
 
         self.export_params_json()
         keypoints_scores = np.array([])
         if detect_keypoints:
-            keypoints_scores = self.detect_keypoints()
+            keypoints_scores = self.detect_kpts()
         if compute_statistics:
             self.compute_statistics(covered_model, keypoints_scores, save_stats)
