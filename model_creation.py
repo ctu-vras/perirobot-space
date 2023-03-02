@@ -89,7 +89,7 @@ def xyz_rpy_to_matrix(xyz_rpy):
     return matrix
 
 
-def prepareRobot(joints, robot_tf):
+def prepareRobot(joints, robot_tf, res):
     d1 = 0.1273
     a2 = -0.612
     a3 = -0.5723
@@ -115,7 +115,7 @@ def prepareRobot(joints, robot_tf):
         mesh.transform(T)
         m += mesh
     m.transform(robot_tf)
-    pcd = m.sample_points_poisson_disk(30000)
+    pcd = m.sample_points_poisson_disk(int(600 / res))  # orig 30000
     return np.asarray(pcd.points)
 
 
@@ -172,89 +172,122 @@ def createTable():
     return table
 
 
-def addHuman(filename, kpts, T, res, folder):
+def addHuman(filename, kpts, T, res, folder, save=False):
     mesh = o3d.io.read_triangle_mesh(f"data/human/{filename}")
     mesh.compute_vertex_normals()
     keypoints = T @ np.hstack((kpts, np.ones((kpts.shape[0], 1)))).T
     mesh.transform(T)
-    pcd = mesh.sample_points_poisson_disk(80000)
+    pcd = mesh.sample_points_poisson_disk(int(1600 / res))  # orig 80000
     human_points = np.asarray(pcd.points)
-    human_model = octomap.OcTree(res)
-    for p in human_points:
-        human_model.updateNode(p, True, lazy_eval=True)
-    human_model.updateInnerOccupancy()
+    if save:
+        human_model = octomap.OcTree(res)
+        for p in human_points:
+            human_model.updateNode(p, True, lazy_eval=True)
+        human_model.updateInnerOccupancy()
 
-    aabb_min = human_model.getMetricMin()
-    aabb_max = human_model.getMetricMax()
-    center = (aabb_min + aabb_max) / 2
-    dimension = np.array((aabb_max - aabb_min) / res).astype(int)
-    origin = center - dimension / 2 * res
-    grid = np.full(dimension, 0, np.int32)
-    transform = trimesh.transformations.scale_and_translate(scale=res, translate=origin)
-    voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
-    
-    human_labels = human_model.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
-    occ_idx = voxels.points_to_indices(voxels.points[human_labels == 1])
-    grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
-    filled = ndi.binary_fill_holes(grid).astype(int)
+        aabb_min = human_model.getMetricMin()
+        aabb_max = human_model.getMetricMax()
+        center = (aabb_min + aabb_max) / 2
+        dimension = np.array((aabb_max - aabb_min) / res).astype(int)
+        origin = center - dimension / 2 * res
+        grid = np.full(dimension, 0, np.int32)
+        transform = trimesh.transformations.scale_and_translate(scale=res, translate=origin)
+        voxels = trimesh.voxel.VoxelGrid(encoding=grid + 1, transform=transform)  # +1 because zero cells are skipped
 
-    for p in voxels.indices_to_points(np.argwhere((filled == 1) & (grid == 0))):
-        human_model.updateNode(p, True, lazy_eval=True)
+        human_labels = human_model.getLabels(voxels.points).flatten()  # 1 occupied, -1 free
+        occ_idx = voxels.points_to_indices(voxels.points[human_labels == 1])
+        grid[occ_idx[:, 0], occ_idx[:, 1], occ_idx[:, 2]] = 1
+        filled = ndi.binary_fill_holes(grid).astype(int)
 
-    human_model.updateInnerOccupancy()
-    human_model.writeBinary(f'models/{folder}/human.bt'.encode())
+        for p in voxels.indices_to_points(np.argwhere((filled == 1) & (grid == 0))):
+            human_model.updateNode(p, True, lazy_eval=True)
+
+        human_model.updateInnerOccupancy()
+        human_model.writeBinary(f'models/{folder}/human.bt'.encode())
 
     return human_points, np.round(keypoints[:3, :].T, 2)
 
 
-def composeModel(res, points_array, name):
+def composeModel(res, points_array, filename):
     tree = octomap.OcTree(res)
     for points in points_array:
         for p in points:
             tree.updateNode(p, True, lazy_eval=True)
     tree.updateInnerOccupancy()
-    tree.writeBinary(f'models/{name}/model.bt'.encode())
+    tree.writeBinary(f'models/{filename}.bt'.encode())
 
 
 if __name__ == "__main__":
 
     joints = [0, 0, -np.pi / 2, np.pi / 2, -np.pi / 2, -np.pi / 2, 0]
-
+    resolution = 0.02  # resolution for 5 cm -> 2 cm
     T = np.eye(4)  # robot TF
     T[:3, -1] = [0, 0, 1]
-    robot = prepareRobot(joints, T)
+    robot = prepareRobot(joints, T, resolution)
     table = createTable()
     cell = createCell()
-    filenames = ['operator-v1.stl', '02zman22-v1.stl', 'dummy.stl', 'waiting.stl', 'what.stl', 'man.stl', 'man2.stl']
+    filenames = ['operator-v1.stl', '02zman22-v1.stl', 'dummy.stl', 'waiting.stl', 'what.stl', 'man.stl',
+                 'man2.stl']  # human1, human4, human6, human63
     Ts = [[0.2, -0.8, 0, 0, 0, np.pi / 2], [0.2, -0.8, 0, 0, 0, np.pi / 2], [0.2, -0.8, 0, 0, 0, -np.pi / 2],
           [0.3, -0.8, 0, 0, 0, 0], [0.3, -0.8, 0, 0, 0, np.pi / 2], [0.2, -0.8, 0, 0, 0, np.pi],
           [0.5, -0.8, 0.3, 0, 0, np.pi]]  # human poses
 
-    resolution = 0.02  # resolution for 5 cm -> 2 cm
     robot_model = octomap.OcTree(resolution)
     for p in robot:
         robot_model.updateNode(p, True, lazy_eval=True)
     robot_model.updateInnerOccupancy()
 
     for i in range(len(filenames)):
-        os.makedirs(f'models/human{i}-exp2', exist_ok=True)
-        human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]), resolution, f"human{i}-exp2")
-        
-        composeModel(resolution, [robot, cell, table, human_points], f"human{i}-exp2")
-        np.savetxt(f"models/human{i}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
-        np.savez(f"models/human{i}-exp2/vars.npz", joints, T, Ts[i])
-        robot_model.writeBinary(f'models/human{i}-exp2/robot.bt'.encode())
+        f = f'human{i}-exp3'
+        os.makedirs(f'models/{f}', exist_ok=True)
+        human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]), resolution, f, True)
+
+        composeModel(resolution, [robot, cell, table, human_points], f)
+        np.savetxt(f"models/{f}/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+        np.savez(f"models/{f}/vars.npz", joints, T, Ts[i])
+        robot_model.writeBinary(f'models/{f}/robot.bt'.encode())
 
     i = 6
     j = 3
-    os.makedirs(f'models/human{i}{j}-exp2', exist_ok=True)
-    human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]), resolution, f"human{i}{j}-exp2")
-    human_points2, kpts2 = addHuman(filenames[j], keypoints[j], xyz_rpy_to_matrix([0.3, 0.8, 0, 0, 0, np.pi]), resolution, f"human{i}{j}-exp2")
-    composeModel(resolution, [robot, cell, table, human_points, human_points2], f"human{i}{j}-exp2")
-    np.savetxt(f"models/human{i}{j}-exp2/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
-    np.savez(f"models/human{i}{j}-exp2/vars.npz", joints, T, Ts[i])
-    robot_model.writeBinary(f'models/human{i}{j}-exp2/robot.bt'.encode())
+    f = f'human{i}{j}-exp3'
+    os.makedirs(f'models/{f}', exist_ok=True)
+    human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]), resolution, f, True)
+    human_points2, kpts2 = addHuman(filenames[j], keypoints[j], xyz_rpy_to_matrix([0.3, 0.8, 0, 0, 0, np.pi]),
+                                    resolution, f)
+    composeModel(resolution, [robot, cell, table, human_points, human_points2], f)
+    np.savetxt(f"models/{f}/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+    np.savez(f"models/{f}/vars.npz", joints, T, Ts[i])
+    robot_model.writeBinary(f'models/{f}/robot.bt'.encode())
 
-    os.makedirs(f'models/nohuman-exp2', exist_ok=True)
-    composeModel(resolution, [robot, cell, table], "nohuman-exp2")
-    robot_model.writeBinary(f'models/nohuman-exp2/robot.bt'.encode())
+    f = "nohuman-exp3"
+    os.makedirs(f'models/{f}', exist_ok=True)
+    composeModel(resolution, [robot, cell, table], f)
+    robot_model.writeBinary(f'models/{f}/robot.bt'.encode())
+
+    steps_x = 9
+    steps_y = 5
+    start_x = -0.25
+    start_y = 0.9
+    step = 0.25
+    path = [(step * j + start_x, start_y, np.pi) for j in range(steps_x)] + \
+           [(step * (steps_x - 1) + start_x, start_y - j * step, np.pi / 2) for j in range(1, steps_y + 1)] + \
+           [(step * (steps_x - 1) + start_x, start_y - j * step, -np.pi / 2) for j in range(steps_y - 1, 0, -1)] + \
+           [(step * j + start_x, start_y, 0) for j in range(steps_x - 1, 0, -1)]
+    joints_all = [[0, 0, -np.pi / 2, np.pi / 2, -np.pi / 2, -np.pi / 2, 0],
+                  [0, 0, -np.pi / 3, np.pi / 2, -2 * np.pi / 3, -np.pi / 2, 0]]  # p0
+
+    for i in range(1):
+        f = f'human{i}-dyn-exp2'
+        os.makedirs(f'models/{f}', exist_ok=True)
+        human_points, kpts = addHuman(filenames[i], keypoints[i], xyz_rpy_to_matrix(Ts[i]), resolution, f, True)
+        j = 0
+        for x, y, theta in path:
+            robot = prepareRobot(joints_all[j % len(joints_all)], T, resolution)
+            print(x, y, theta)
+            human_points2, kpts2 = addHuman(filenames[2], keypoints[2], xyz_rpy_to_matrix([x, y, 0, 0, 0, theta]),
+                                            resolution, f)
+            composeModel(resolution, [robot, cell, table, human_points, human_points2], f + f"/model{j}")
+            j += 1
+        np.savetxt(f"models/{f}/keypoints.csv", kpts, fmt='%1.2f', delimiter=",")
+        np.savez(f"models/{f}/vars.npz", joints, T, Ts[i])
+        robot_model.writeBinary(f'models/{f}/robot.bt'.encode())

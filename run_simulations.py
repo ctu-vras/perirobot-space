@@ -26,35 +26,38 @@ def plot_skeleton(filename):
     fig.show()
 
 
-def generate_experiments(exp_cfg, cases, res, time_stamping=True):
-
+def generate_experiments(exp_cfg, scenes, res, time_stamping=True):
     time_stamp = ''
     if time_stamping:
         time_stamp = datetime.now().strftime("%y%m%d%H%M")
 
-    cam_matrix = np.array([[120 / np.tan(45 / 2), 0, 120], [0, 80 / np.tan(45 / 2), 80], [0, 0, 1]])
-    ceiling = [(0.5, 0., 2.99), Rotation.from_euler('XYZ', [180, 0, 0], degrees=True)]
-    ground = [(0.5, 0., res+0.01), Rotation.from_euler('XYZ', [0, 0, 0], degrees=True)]
-    wall1 = [(2.99, 0, 1.5), Rotation.from_euler('XYZ', [0, -90, 0], degrees=True)]
-    wall2 = [(-2.98, 0, 1.5), Rotation.from_euler('XYZ', [0, 90, 0], degrees=True)]
-    wall3 = [(0, -1.98, 1.5), Rotation.from_euler('XYZ', [-90, 0, 0], degrees=True)]
-    wall4 = [(0, 1.99, 1.5), Rotation.from_euler('XYZ', [90, 0, 0], degrees=True)]
+    cam_matrix = np.array(
+        [[0, 360 / np.tan(np.deg2rad(58 / 2)), 360], [640 / np.tan(np.deg2rad(87 / 2)), 0, 640], [0, 0, 1]])
+    init_rot = Rotation.from_euler('xyz', [0, 90, 0], degrees=True)
+
+    ceiling = [(-1.5, -1., 2.99), Rotation.from_euler('xyz', [0, 90, 0], degrees=True) * init_rot]
+    ground = [(0.5, 0., res + 0.01), Rotation.from_euler('xyz', [0, -90, 0], degrees=True) * init_rot]
+    wall1 = [(3 - res, 0, 1.5), Rotation.from_euler('xyz', [0, 0, 180], degrees=True) * init_rot]
+    wall2 = [(-3 + 2 * res, 0, 1.5), Rotation.from_euler('xyz', [0, 0, 0], degrees=True) * init_rot]
+    wall3 = [(0, -2 + 2 * res, 1.5), Rotation.from_euler('xyz', [0, 0, 90], degrees=True) * init_rot]
+    wall4 = [(1, 2 - res, 0.5), Rotation.from_euler('xyz', [0, 0, -90], degrees=True) * init_rot]
     sensors = np.array([ceiling, ground, wall1, wall2, wall3, wall4], dtype=object)
 
     experiments = {}
     for exp_key in exp_cfg:
-        for case in cases:
+        for scene in scenes:
             exp = exp_cfg[exp_key]
-            code = exp['code'] + '_' + case
+            code = exp['code'] + '_' + scene
 
             lidar_poses = sensors[np.array(exp['boolean_mask_lidar']) == 1, 0]
             rgbd_poses = sensors[np.array(exp['boolean_mask_rgbd']) == 1, 0]
-            cam_rotations = sensors[np.array(exp['boolean_mask_rgbd']) == 1, 1]
+            cam_rotations = sensors[(np.array(exp['boolean_mask_rgbd']) == 1)
+                                    | (np.array(exp['boolean_mask_lidar']) == 1), 1]
             cam_matrices = []
             for i in range(np.sum(exp['boolean_mask_rgbd'])):
                 cam_matrices.append(cam_matrix)
 
-            experiments[code] = {'case': case,
+            experiments[code] = {'scene': scene,
                                  'name': time_stamp + exp['name'],
                                  'lidar_poses': lidar_poses,
                                  'rgbd_poses': rgbd_poses,
@@ -65,35 +68,37 @@ def generate_experiments(exp_cfg, cases, res, time_stamping=True):
                                  'robot_inflation_value': exp['robot_inflation_value'],
                                  'cam_matrices': cam_matrices,
                                  'cam_rotations': cam_rotations,
+                                 'cam_poses': []
                                  }
     return experiments
 
 
-if __name__ == "__main__":
-    cases = ["human1-exp2",
-             "human4-exp2",
-             "human6-exp2",
-             "human63-exp2",
-             ]
+def main():
+    scenes = ["human1-exp2", "human4-exp2", "human63-exp2"]
 
     with open('experiments.json', "r") as cfg:
         experiment_config = json.load(cfg)
 
     resolution = 0.02  # m
-    experiments = generate_experiments(experiment_config, cases, resolution, time_stamping=False)
+    experiments = generate_experiments(experiment_config, scenes, resolution, time_stamping=False)
 
     # General parameters
     proximity_range = 10  # max distance detected by ray proximity sensor
     lidar_range = 10  # max distance detected by lidar (fish-eye) sensor
     for exp_key in experiments:
         exp = experiments[exp_key]
-        simulation = pers.Pers(exp['case'], resolution=resolution, output_name=exp['name'],
-                               lidar_poses=exp['lidar_poses'], rgbd_poses=exp['rgbd_poses'],
-                               pad_poses=exp['pad_poses'], gate_poses=exp['gate_poses'],
-                               proximity_poses=exp['proximity_poses'], cam_matrices=exp['cam_matrices'],
-                               cam_rotations=exp['cam_rotations'],
-                               proximity_rays=exp['proximity_rays'],
-                               robot_inflation_value=exp['robot_inflation_value'],
-                               proximity_range=proximity_range, lidar_range=lidar_range)
+        simulation = pers.Pers(exp['scene'], resolution=resolution, output_name=exp['name'],
+                               lidar_poses=exp['lidar_poses'], rgbd_poses=exp['rgbd_poses'], pad_poses=exp['pad_poses'],
+                               gate_poses=exp['gate_poses'], prox_poses=exp['proximity_poses'],
+                               cam_poses=exp['cam_poses'], cam_matrices=exp['cam_matrices'],
+                               cam_rotations=exp['cam_rotations'], prox_rays=exp['proximity_rays'],
+                               robot_inflation_value=exp['robot_inflation_value'], prox_range=proximity_range,
+                               lidar_range=lidar_range, rgbd_range=lidar_range, noise_lidar=0.0, noise_rgbd=0.0,
+                               noise_prox=0.0, noise_rob_prox=0.0, lidar_mindist=0.2, rgbd_mindist=0.3,
+                               prox_mindist=0.1, robot_zone=[[[-0.5, 2], [-1, 1], [0, 3]]], add_robot_vol=False)
 
         simulation.process_sensors(compute_statistics=True, detect_keypoints=True, save_stats=True)
+
+
+if __name__ == "__main__":
+    main()
